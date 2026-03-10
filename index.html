@@ -94,19 +94,26 @@
     async function renderPages(pdf, container) {
       container.innerHTML = "";
       var numPages = pdf.numPages;
+      var dpr = window.devicePixelRatio || 1;
       for (var i = 1; i <= numPages; i++) {
         setProgress("Rendering page " + i + " of " + numPages + "\u2026");
         var page = await pdf.getPage(i);
         var containerWidth = container.clientWidth - 24;
         var viewport = page.getViewport({ scale: 1 });
-        var scale = Math.min(Math.max(containerWidth / viewport.width, 0.5), 2.5);
-        var sv = page.getViewport({ scale: scale });
+        /* Scale to fit container width */
+        var baseScale = containerWidth / viewport.width;
+        /* Render at higher resolution for sharp text on HiDPI screens */
+        var hiResScale = baseScale * dpr;
+        var sv = page.getViewport({ scale: hiResScale });
 
         var canvas = document.createElement("canvas");
         canvas.className = "pdf-canvas";
+        /* Canvas internal resolution = high res */
         canvas.width = sv.width;
         canvas.height = sv.height;
-        canvas.style.width = Math.min(sv.width, containerWidth) + "px";
+        /* CSS display size = logical size (sharp on all screens) */
+        canvas.style.width = containerWidth + "px";
+        canvas.style.height = (sv.height / dpr) + "px";
         container.appendChild(canvas);
         await page.render({ canvasContext: canvas.getContext("2d"), viewport: sv }).promise;
       }
