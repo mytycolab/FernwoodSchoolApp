@@ -2,13 +2,16 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <title>Fernwood Montessori — Student &amp; Family Hub</title>
   <meta name="description" content="Breakfast menus, lunch menus, district calendar, and weekly newsletter for Fernwood Montessori families." />
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏴‍☠️</text></svg>" />
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
   <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.3.1/umd/react.production.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.3.1/umd/react-dom.production.min.js"></script>
+  <!-- Firebase -->
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
   <style>
     *, *::before, *::after { box-sizing: border-box; }
     html, body, #root { margin: 0; height: 100%; overflow: hidden; }
@@ -16,36 +19,47 @@
     @keyframes fwspin { to { transform: rotate(360deg); } }
     @keyframes fwfadein { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
   </style>
+  <script>
+    /* Block browser's native pinch-zoom on the outer page.
+       This lets the PDF.js viewer inside the iframe handle zoom exclusively.
+       We intercept multi-touch gestures and the Ctrl+wheel zoom shortcut. */
+    document.addEventListener("touchmove", function(ev) {
+      if (ev.touches && ev.touches.length > 1) { ev.preventDefault(); }
+    }, { passive: false });
+    document.addEventListener("gesturestart", function(ev) { ev.preventDefault(); }, { passive: false });
+    document.addEventListener("gesturechange", function(ev) { ev.preventDefault(); }, { passive: false });
+    document.addEventListener("gestureend", function(ev) { ev.preventDefault(); }, { passive: false });
+    /* Block Ctrl+wheel zoom on desktop (optional, keeps page at 100%) */
+    document.addEventListener("wheel", function(ev) {
+      if (ev.ctrlKey) { ev.preventDefault(); }
+    }, { passive: false });
+  </script>
 </head>
 <body>
   <div id="root"></div>
   <script>
-  /*
-   * ============================================================
-   *  FERNWOOD MONTESSORI HUB
-   *  --------------------------------------------------------
-   *  HOW TO UPDATE CONTENT:
-   *  Use the Admin button at the bottom of the app, or
-   *  change the URLs below and commit & push to GitHub.
-   *
-   *  NEWSLETTERS: Add the newest one at the TOP of the list.
-   *  Keep up to 3 entries. Each needs a label and url.
-   *
-   *  PDFs: Paste the direct MPS PDF link.
-   *  Google Docs: Paste the share URL (auto-converts to /preview).
-   * ============================================================
-   */
-  const CONFIG = {
+  /* ═══════════════════════════════════════════════════════
+     FIREBASE CONFIG
+     ═══════════════════════════════════════════════════════ */
+  firebase.initializeApp({
+    apiKey: "AIzaSyBYeg0ZjW-IJDuiTj-qqVzZmfEg71z76rk",
+    authDomain: "fernwood-hub.firebaseapp.com",
+    projectId: "fernwood-hub",
+    storageBucket: "fernwood-hub.firebasestorage.app",
+    messagingSenderId: "98929066224",
+    appId: "1:98929066224:web:3f53e7ae4a9fa4c14f4235",
+  });
+  var db = firebase.firestore();
+
+  /* ═══════════════════════════════════════════════════════
+     DEFAULT CONFIG — used as fallback if Firebase is empty
+     ═══════════════════════════════════════════════════════ */
+  var DEFAULTS = {
     schoolName: "Fernwood Montessori",
-    schoolPhotoUrl:
-      "https://imagescdn.homes.com/i2/HS2V7HUuGZKlACCPq6EHIbE34BoQhQB5H5wzhVzV3kE/114/fernwood-montessori-school-milwaukee-wi-primaryphoto.jpg?p=1",
-    breakfastMenuUrl:
-      "https://resources.finalsite.net/images/v1772224302/mpsmilwaukeek12wius/bpoefmzs3n7rpwa6joog/MarchELBreakfastMenu-MilwaukeePublicSchools.pdf",
-    lunchMenuUrl:
-      "https://resources.finalsite.net/images/v1772224302/mpsmilwaukeek12wius/xv7gvhde7wwg4iy4uezb/MarchELLunchMenu-MilwaukeePublicSchools.pdf",
-    districtCalendarUrl:
-      "https://resources.finalsite.net/images/v1766515266/mpsmilwaukeek12wius/wue9wcski23lt4gxz6ey/mps-district-calendar-2526v8.pdf",
-    /* NEWSLETTERS: newest first, up to 3 */
+    schoolPhotoUrl: "https://imagescdn.homes.com/i2/HS2V7HUuGZKlACCPq6EHIbE34BoQhQB5H5wzhVzV3kE/114/fernwood-montessori-school-milwaukee-wi-primaryphoto.jpg?p=1",
+    breakfastMenuUrl: "https://resources.finalsite.net/images/v1772224302/mpsmilwaukeek12wius/bpoefmzs3n7rpwa6joog/MarchELBreakfastMenu-MilwaukeePublicSchools.pdf",
+    lunchMenuUrl: "https://resources.finalsite.net/images/v1772224302/mpsmilwaukeek12wius/xv7gvhde7wwg4iy4uezb/MarchELLunchMenu-MilwaukeePublicSchools.pdf",
+    districtCalendarUrl: "https://resources.finalsite.net/images/v1766515266/mpsmilwaukeek12wius/wue9wcski23lt4gxz6ey/mps-district-calendar-2526v8.pdf",
     newsletters: [
       { label: "Newsletter #26 — 3/10/26", url: "https://docs.google.com/document/d/1QlAx1fHovxnU83zJlV424jOlFUFR166o/preview" },
       { label: "Newsletter #25 — 3/3/26",  url: "https://docs.google.com/document/d/1qDguDhQpLWDjLX6BiZtQILZLhJtsOKGM/preview" },
@@ -54,65 +68,110 @@
     adminPassword: "PirateFernwood",
   };
 
-  const e = React.createElement;
-  const { useState, useEffect } = React;
+  var e = React.createElement;
+  var useState = React.useState, useEffect = React.useEffect, useCallback = React.useCallback;
 
-  const SECTIONS = [
+  var SECTIONS = [
     { id: "breakfast", label: "Breakfast Menu", icon: "\u{1F305}", color: "#C62828", desc: "This month's MPS breakfast menu" },
     { id: "lunch",     label: "Lunch Menu",     icon: "\u{1F34E}", color: "#D32F2F", desc: "This month's MPS lunch menu" },
-    { id: "calendar",  label: "District Calendar", icon: "\u{1F4C5}", color: "#1a1a1a", desc: "MPS district calendar" },
+    { id: "calendar",  label: "District Calendar", icon: "\u{1F4C5}", color: "#C62828", desc: "MPS district calendar" },
     { id: "newsletter",label: "Newsletter",     icon: "\u{1F4F0}", color: "#B71C1C", desc: "Weekly Fernwood newsletter" },
   ];
-
-  function getUrl(id) {
-    if (id === "breakfast") return CONFIG.breakfastMenuUrl;
-    if (id === "lunch") return CONFIG.lunchMenuUrl;
-    if (id === "calendar") return CONFIG.districtCalendarUrl;
-    if (id === "newsletter") return (CONFIG.newsletters[0] && CONFIG.newsletters[0].url) || "";
-    return "";
-  }
 
   function getEmbedUrl(url) {
     if (!url) return "";
     if (url.toLowerCase().includes(".pdf"))
-      return "https://mozilla.github.io/pdf.js/web/viewer.html?file=" + encodeURIComponent(url);
+      return "https://mozilla.github.io/pdf.js/web/viewer.html?file=" + encodeURIComponent(url) + "#zoom=page-width";
     if (url.includes("docs.google.com"))
       return url.replace(/\/edit.*$/, "/preview").replace(/\/pub.*$/, "/preview");
     return url;
   }
 
-  /* ══════════════════════════════════════════════════════
-     DOCUMENT VIEWER
-     ══════════════════════════════════════════════════════ */
-  function DocViewer(_ref) {
-    var section = _ref.section, onBack = _ref.onBack, overrideUrl = _ref.overrideUrl;
-    var isNewsletter = section.id === "newsletter";
+  /* ═══════════════════════════════════════════════════════
+     FIREBASE DATA HOOK — loads live data, falls back to defaults
+     ═══════════════════════════════════════════════════════ */
+  function useFirebaseConfig() {
+    var state = useState({ loaded: false, data: DEFAULTS });
+    var config = state[0], setConfig = state[1];
 
-    /* For newsletter, allow picking from dropdown */
+    useEffect(function() {
+      /* Listen for real-time updates */
+      var unsub = db.collection("config").doc("main").onSnapshot(function(doc) {
+        if (doc.exists) {
+          var d = doc.data();
+          setConfig({ loaded: true, data: {
+            ...DEFAULTS,
+            breakfastMenuUrl: d.breakfastMenuUrl || DEFAULTS.breakfastMenuUrl,
+            lunchMenuUrl: d.lunchMenuUrl || DEFAULTS.lunchMenuUrl,
+            districtCalendarUrl: d.districtCalendarUrl || DEFAULTS.districtCalendarUrl,
+            newsletters: d.newsletters && d.newsletters.length > 0 ? d.newsletters : DEFAULTS.newsletters,
+          }});
+        } else {
+          /* First run: write defaults to Firebase */
+          db.collection("config").doc("main").set({
+            breakfastMenuUrl: DEFAULTS.breakfastMenuUrl,
+            lunchMenuUrl: DEFAULTS.lunchMenuUrl,
+            districtCalendarUrl: DEFAULTS.districtCalendarUrl,
+            newsletters: DEFAULTS.newsletters,
+          });
+          setConfig({ loaded: true, data: DEFAULTS });
+        }
+      }, function(err) {
+        console.error("Firebase error:", err);
+        setConfig({ loaded: true, data: DEFAULTS });
+      });
+      return function() { unsub(); };
+    }, []);
+
+    return config;
+  }
+
+  /* ═══════════════════════════════════════════════════════
+     DOCUMENT VIEWER
+     ═══════════════════════════════════════════════════════ */
+  function DocViewer(_ref) {
+    var section = _ref.section, onBack = _ref.onBack, config = _ref.config;
+    var isNewsletter = section.id === "newsletter";
     var nlState = useState(0);
     var nlIdx = nlState[0], setNlIdx = nlState[1];
 
-    var url = overrideUrl || (isNewsletter ? (CONFIG.newsletters[nlIdx] && CONFIG.newsletters[nlIdx].url) || "" : getUrl(section.id));
+    function getUrl() {
+      if (section.id === "breakfast") return config.breakfastMenuUrl;
+      if (section.id === "lunch") return config.lunchMenuUrl;
+      if (section.id === "calendar") return config.districtCalendarUrl;
+      if (isNewsletter) return (config.newsletters[nlIdx] && config.newsletters[nlIdx].url) || "";
+      return "";
+    }
+
+    var url = getUrl();
     var hasUrl = url && url.length > 0;
     var embedUrl = getEmbedUrl(url);
+    /* For newsletters, build a direct Google Doc link for "Open in Browser" */
+    var directUrl = url;
 
     return e("div", { style: S.viewerRoot },
-      /* top bar */
       e("div", { style: { ...S.topBar, borderBottomColor: section.color + "33" } },
         e("button", { onClick: onBack, style: S.backBtn },
           e("span", { style: { fontSize: 16 } }, "\u2190"), " Home"),
         isNewsletter
-          ? /* newsletter dropdown */
-            e("select", {
+          ? e("select", {
               value: nlIdx,
               onChange: function(ev) { setNlIdx(Number(ev.target.value)); },
               style: { ...S.nlSelect, color: section.color, borderColor: section.color + "44" },
-            }, CONFIG.newsletters.map(function(nl, i) {
+            }, config.newsletters.map(function(nl, i) {
               return e("option", { key: i, value: i }, nl.label || ("Newsletter " + (i + 1)));
             }))
           : e("div", { style: S.topBarCenter },
               e("span", { style: { fontSize: 16 } }, section.icon),
               e("span", { style: { fontWeight: 700, color: section.color } }, section.label))),
+      /* Open in Browser bar for newsletters */
+      isNewsletter && hasUrl && e("div", { style: S.openBrowserBar },
+        e("span", { style: { fontSize: 13, color: "#718096" } }, "Need to click a link in the newsletter?"),
+        e("a", {
+          href: directUrl.replace(/\/preview.*$/, "").replace(/\/pub.*$/, ""),
+          target: "_blank", rel: "noopener noreferrer",
+          style: S.openBrowserBtn,
+        }, "\u{1F517} Open in Browser")),
 
       /* content */
       !hasUrl
@@ -120,35 +179,116 @@
             e("div", { style: S.centerMsg },
               e("p", { style: { margin: 0, fontSize: 48 } }, section.icon),
               e("h3", { style: { margin: "12px 0 6px", fontSize: 20, color: section.color } }, section.label),
-              e("p", { style: S.centerMsgText }, "No link has been added for this newsletter yet. Check back soon!"),
+              e("p", { style: S.centerMsgText }, "No link has been added yet. Check back soon!"),
               e("button", { onClick: onBack, style: { ...S.centerBackBtn, borderColor: section.color, color: section.color } }, "\u2190 Back to Home")))
         : e("div", { style: S.embedArea },
-            e("iframe", {
-              key: embedUrl,
-              src: embedUrl,
-              title: section.label,
-              style: S.embedFull,
-              allow: "autoplay; fullscreen",
-            })));
+            e("iframe", { key: embedUrl, src: embedUrl, title: section.label, style: S.embedFull, allow: "autoplay; fullscreen" })));
   }
 
-  /* ══════════════════════════════════════════════════════
-     ADMIN PORTAL
-     ══════════════════════════════════════════════════════ */
+  /* ═══════════════════════════════════════════════════════
+     ADMIN PORTAL — writes to Firebase
+     ═══════════════════════════════════════════════════════ */
   function AdminPortal(_ref) {
-    var onClose = _ref.onClose;
-    var authState = useState(false);
-    var authed = authState[0], setAuthed = authState[1];
-    var pwState = useState("");
-    var pw = pwState[0], setPw = pwState[1];
-    var errState = useState(false);
-    var err = errState[0], setErr = errState[1];
+    var onClose = _ref.onClose, config = _ref.config;
+    var authState = useState(false), authed = authState[0], setAuthed = authState[1];
+    var pwState = useState(""), pw = pwState[0], setPw = pwState[1];
+    var errState = useState(false), err = errState[0], setErr = errState[1];
+    var msgState = useState(""), msg = msgState[0], setMsg = msgState[1];
+
+    /* Calendar update fields */
+    var calUrlState = useState(""), calUrl = calUrlState[0], setCalUrl = calUrlState[1];
+
+    /* Newsletter fields */
+    var nlUrlState = useState(""), nlUrl = nlUrlState[0], setNlUrl = nlUrlState[1];
+    var nlFetchState = useState("idle"); /* idle | fetching | fetched | error */
+    var nlFetch = nlFetchState[0], setNlFetch = nlFetchState[1];
+    var nlTitleState = useState(""), nlTitle = nlTitleState[0], setNlTitle = nlTitleState[1];
 
     function handleLogin() {
-      if (pw === CONFIG.adminPassword) { setAuthed(true); setErr(false); }
+      if (pw === DEFAULTS.adminPassword) { setAuthed(true); setErr(false); }
       else { setErr(true); }
     }
 
+    function showMsg(text) { setMsg(text); setTimeout(function() { setMsg(""); }, 3000); }
+
+    /* Extract Google Doc ID from various URL formats */
+    function extractDocId(url) {
+      var match = url.match(/\/d\/([a-zA-Z0-9_-]+)/);
+      return match ? match[1] : null;
+    }
+
+    /* Fetch the document title from Google */
+    function fetchDocTitle(url) {
+      var docId = extractDocId(url);
+      if (!docId) { setNlFetch("error"); setNlTitle(""); return; }
+      setNlFetch("fetching");
+      setNlTitle("");
+      /* Use Google's oembed-like endpoint to get the title */
+      var fetchUrl = "https://docs.google.com/document/d/" + docId + "/export?format=txt";
+      /* Alternatively, fetch the sharing page which has the title in HTML */
+      var pageUrl = "https://docs.google.com/document/d/" + docId + "/preview";
+      /* Use a CORS proxy to fetch the page and extract the title */
+      fetch("https://corsproxy.io/?" + encodeURIComponent("https://docs.google.com/document/d/" + docId)).then(function(res) {
+        return res.text();
+      }).then(function(html) {
+        var titleMatch = html.match(/<title>([^<]+)<\/title>/i);
+        if (titleMatch && titleMatch[1]) {
+          var title = titleMatch[1].replace(/ - Google Docs$/, "").replace(/ - Google Drive$/, "").trim();
+          setNlTitle(title);
+          setNlFetch("fetched");
+        } else {
+          setNlTitle("");
+          setNlFetch("error");
+        }
+      }).catch(function() {
+        setNlTitle("");
+        setNlFetch("error");
+      });
+    }
+
+    /* When URL field changes, auto-fetch title */
+    function handleNlUrlChange(val) {
+      setNlUrl(val);
+      setNlFetch("idle");
+      setNlTitle("");
+    }
+
+    function handleFetchTitle() {
+      if (!nlUrl.trim()) return;
+      fetchDocTitle(nlUrl.trim());
+    }
+
+    /* Save new calendar URL to Firebase */
+    function saveCalendar() {
+      if (!calUrl.trim()) return;
+      db.collection("config").doc("main").update({
+        districtCalendarUrl: calUrl.trim(),
+      }).then(function() {
+        showMsg("\u2705 District calendar updated!");
+        setCalUrl("");
+      }).catch(function(e) { showMsg("\u274C Error: " + e.message); });
+    }
+
+    /* Add new newsletter to Firebase (drops oldest if > 3) */
+    function addNewsletter() {
+      if (!nlUrl.trim() || !nlTitle) return;
+      var cleanUrl = nlUrl.trim();
+      if (cleanUrl.includes("docs.google.com")) {
+        cleanUrl = cleanUrl.replace(/\/edit.*$/, "/preview").replace(/\/pub.*$/, "/preview");
+      }
+      var newNl = { label: nlTitle, url: cleanUrl };
+      var updated = [newNl].concat(config.newsletters || []).slice(0, 3);
+      db.collection("config").doc("main").update({
+        newsletters: updated,
+      }).then(function() {
+        showMsg("\u2705 Newsletter added! Oldest dropped if more than 3.");
+        setNlUrl("");
+        setNlTitle("");
+        setNlFetch("idle");
+      }).catch(function(e) { showMsg("\u274C Error: " + e.message); });
+    }
+
+    /* ── Login screen ── */
     if (!authed) {
       return e("div", { style: S.adminOverlay },
         e("div", { style: S.adminCard },
@@ -166,46 +306,85 @@
             e("button", { onClick: handleLogin, style: S.adminLoginBtn }, "Login"))));
     }
 
+    /* ── Authenticated admin panel ── */
     return e("div", { style: S.adminOverlay },
       e("div", { style: { ...S.adminCard, maxWidth: 520 } },
+        /* header */
         e("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 } },
           e("h2", { style: { margin: 0, fontSize: 20, color: "#C62828" } }, "\u2699\uFE0F Admin Portal"),
           e("button", { onClick: onClose, style: S.adminCloseBtn }, "\u2715")),
-        e("p", { style: { margin: "0 0 16px", fontSize: 13, color: "#718096", lineHeight: 1.5 } },
-          "To update a link: edit the ", e("code", { style: { background: "#f1f5f9", padding: "2px 5px", borderRadius: 4, fontSize: 12 } }, "index.html"),
-          " file on GitHub. Find the CONFIG section near the top and replace the URL you need to change. Commit and the site updates in 1\u20132 minutes."),
 
-        e("h3", { style: S.adminSectionTitle }, "PDF Links"),
-        adminField("Breakfast Menu URL", CONFIG.breakfastMenuUrl),
-        adminField("Lunch Menu URL", CONFIG.lunchMenuUrl),
-        adminField("District Calendar URL", CONFIG.districtCalendarUrl),
+        /* success/error message */
+        msg && e("div", { style: S.adminMsg }, msg),
 
-        e("h3", { style: { ...S.adminSectionTitle, marginTop: 18 } }, "Newsletters (newest first)"),
-        CONFIG.newsletters.map(function(nl, i) {
-          return e("div", { key: i, style: { marginBottom: 10 } },
-            e("label", { style: S.adminLabel }, nl.label || ("Newsletter " + (i + 1))),
-            e("div", { style: S.adminUrlBox }, nl.url || "(no URL set)"));
-        }),
+        /* ── SECTION: Update District Calendar ── */
+        e("div", { style: S.adminSection },
+          e("h3", { style: S.adminSectionTitle }, "\u{1F4C5} Update District Calendar"),
+          e("p", { style: S.adminHint }, "Current: ", e("span", { style: { fontSize: 11, color: "#94a3b8", wordBreak: "break-all" } },
+            config.districtCalendarUrl ? config.districtCalendarUrl.substring(0, 60) + "\u2026" : "(none)")),
+          e("input", {
+            type: "text", value: calUrl, placeholder: "Paste new calendar PDF URL",
+            onChange: function(ev) { setCalUrl(ev.target.value); },
+            style: S.adminInput,
+          }),
+          e("button", { onClick: saveCalendar, style: S.adminSaveBtn, disabled: !calUrl.trim() }, "Update Calendar")),
 
-        e("div", { style: { marginTop: 18, padding: "12px 14px", background: "#fef2f2", borderRadius: 10, border: "1px solid #fecaca" } },
-          e("p", { style: { margin: 0, fontSize: 13, color: "#991b1b", lineHeight: 1.5 } },
-            e("strong", null, "How to update:"), " Go to ",
-            e("a", { href: "https://github.com/mytycolab/FernwoodSchoolApp", target: "_blank", rel: "noopener noreferrer", style: { color: "#C62828" } }, "your GitHub repo"),
-            " \u2192 click ", e("code", { style: { background: "#fff", padding: "1px 4px", borderRadius: 3, fontSize: 12 } }, "index.html"),
-            " \u2192 pencil icon to edit \u2192 update the URLs in CONFIG \u2192 commit changes."))));
+        /* ── SECTION: Add Newsletter ── */
+        e("div", { style: S.adminSection },
+          e("h3", { style: S.adminSectionTitle }, "\u{1F4F0} Add New Newsletter"),
+          e("p", { style: S.adminHint }, "Paste the Google Doc URL below. The title will be pulled automatically from the document."),
+          e("input", {
+            type: "text", value: nlUrl, placeholder: "Paste Google Doc URL",
+            onChange: function(ev) { handleNlUrlChange(ev.target.value); },
+            style: S.adminInput,
+          }),
+          e("div", { style: { display: "flex", gap: 8, marginTop: 10 } },
+            e("button", {
+              onClick: handleFetchTitle,
+              style: { ...S.adminFetchBtn, opacity: nlUrl.trim() ? 1 : 0.5 },
+              disabled: !nlUrl.trim() || nlFetch === "fetching",
+            }, nlFetch === "fetching" ? "Fetching title\u2026" : "Fetch Title")),
+          nlFetch === "fetched" && nlTitle && e("div", { style: S.adminTitlePreview },
+            e("p", { style: { margin: 0, fontSize: 12, color: "#718096" } }, "Title found:"),
+            e("p", { style: { margin: "4px 0 0", fontSize: 15, fontWeight: 700, color: "#1a1a1a" } }, nlTitle)),
+          nlFetch === "error" && e("p", { style: { margin: "8px 0 0", fontSize: 13, color: "#ef4444" } },
+            "Could not fetch title. Make sure the document is shared publicly."),
+          nlFetch === "fetched" && nlTitle && e("button", {
+            onClick: addNewsletter,
+            style: S.adminSaveBtn,
+          }, "Add Newsletter")),
+
+        /* ── SECTION: Current Newsletters ── */
+        e("div", { style: S.adminSection },
+          e("h3", { style: S.adminSectionTitle }, "Current Newsletters"),
+          config.newsletters && config.newsletters.length > 0
+            ? config.newsletters.map(function(nl, i) {
+                return e("div", { key: i, style: { marginBottom: 8 } },
+                  e("p", { style: { margin: 0, fontSize: 13, fontWeight: 700, color: "#374151" } }, (i + 1) + ". " + nl.label),
+                  e("p", { style: { margin: "2px 0 0", fontSize: 11, color: "#94a3b8", wordBreak: "break-all" } }, nl.url || "(no URL)"));
+              })
+            : e("p", { style: { fontSize: 13, color: "#94a3b8" } }, "No newsletters configured.")),
+
+        /* ── SECTION: Current PDF Links (read-only reference) ── */
+        e("div", { style: S.adminSection },
+          e("h3", { style: S.adminSectionTitle }, "Current PDF Links"),
+          e("p", { style: S.adminHint }, "To update breakfast or lunch menu URLs, edit the DEFAULTS section in the index.html file on GitHub."),
+          adminReadonly("Breakfast Menu", config.breakfastMenuUrl),
+          adminReadonly("Lunch Menu", config.lunchMenuUrl),
+          adminReadonly("District Calendar", config.districtCalendarUrl))));
   }
 
-  function adminField(label, value) {
-    return e("div", { style: { marginBottom: 10 } },
+  function adminReadonly(label, value) {
+    return e("div", { style: { marginBottom: 8 } },
       e("label", { style: S.adminLabel }, label),
       e("div", { style: S.adminUrlBox }, value || "(no URL set)"));
   }
 
-  /* ══════════════════════════════════════════════════════
+  /* ═══════════════════════════════════════════════════════
      LANDING PAGE
-     ══════════════════════════════════════════════════════ */
+     ═══════════════════════════════════════════════════════ */
   function Landing(_ref) {
-    var onSelect = _ref.onSelect, onAdmin = _ref.onAdmin;
+    var onSelect = _ref.onSelect, onAdmin = _ref.onAdmin, config = _ref.config;
     var mobileState = useState(false);
     var isMobile = mobileState[0], setMobile = mobileState[1];
 
@@ -219,16 +398,14 @@
     return e("div", { style: S.landingRoot },
       e("header", { style: S.header },
         e("div", { style: S.headerContent },
-          e("img", { src: CONFIG.schoolPhotoUrl, alt: CONFIG.schoolName, style: S.schoolPhoto }),
+          e("img", { src: config.schoolPhotoUrl, alt: config.schoolName, style: S.schoolPhoto }),
           e("div", null,
-            e("h1", { style: S.schoolName }, CONFIG.schoolName),
+            e("h1", { style: S.schoolName }, config.schoolName),
             e("p", { style: S.subtitle }, "Student & Family Hub")))),
-
       e("main", { style: S.landingMain },
         !isMobile && e("div", { style: S.welcomeSection },
           e("h2", { style: S.welcomeTitle }, "Welcome!"),
           e("p", { style: S.welcomeText }, "Select an item below to view it.")),
-
         isMobile
           ? e("div", { style: S.mobileCardList },
               SECTIONS.map(function(s, i) {
@@ -265,34 +442,43 @@
                   e("p", { style: S.cardDesc }, s.desc),
                   e("span", { style: { ...S.cardCta, color: s.color } }, "Open \u2192"));
               }))),
-
       e("footer", { style: S.footer },
         e("p", { style: S.footerText }, "Content linked from Milwaukee Public Schools district resources."),
         e("button", { onClick: onAdmin, style: S.adminTrigger }, "\u2699\uFE0F Admin")));
   }
 
-  /* ══════════════════════════════════════════════════════
-     APP
-     ══════════════════════════════════════════════════════ */
+  /* ═══════════════════════════════════════════════════════
+     APP — loads Firebase config, passes it everywhere
+     ═══════════════════════════════════════════════════════ */
   function App() {
     var activeState = useState(null);
     var active = activeState[0], setActive = activeState[1];
     var adminState = useState(false);
     var showAdmin = adminState[0], setShowAdmin = adminState[1];
+    var firebaseConfig = useFirebaseConfig();
+    var config = firebaseConfig.data;
+
+    /* Loading state */
+    if (!firebaseConfig.loaded) {
+      return e("div", { style: { ...S.centerMsg, position: "fixed", inset: 0, background: "#f5f0f0" } },
+        e("div", { style: { ...S.spinner, borderTopColor: "#C62828" } }),
+        e("p", { style: { marginTop: 14, fontSize: 15, color: "#718096" } }, "Loading\u2026"));
+    }
 
     var section = active ? SECTIONS.find(function(s) { return s.id === active; }) : null;
 
-    if (showAdmin) return e(AdminPortal, { onClose: function() { setShowAdmin(false); } });
-    if (section) return e(DocViewer, { section: section, onBack: function() { setActive(null); } });
+    if (showAdmin) return e(AdminPortal, { config: config, onClose: function() { setShowAdmin(false); } });
+    if (section) return e(DocViewer, { section: section, config: config, onBack: function() { setActive(null); } });
     return e(Landing, {
+      config: config,
       onSelect: function(id) { setActive(id); },
       onAdmin: function() { setShowAdmin(true); },
     });
   }
 
-  /* ══════════════════════════════════════════════════════
+  /* ═══════════════════════════════════════════════════════
      STYLES
-     ══════════════════════════════════════════════════════ */
+     ═══════════════════════════════════════════════════════ */
   var S = {
     landingRoot: { height: "100%", display: "flex", flexDirection: "column", overflow: "auto" },
     header: { background: "linear-gradient(135deg,#1a1a1a 0%,#2d2d2d 40%,#C62828 100%)", color: "#fff", padding: "14px 20px", position: "relative", boxShadow: "0 2px 12px rgba(0,0,0,0.3)", flexShrink: 0 },
@@ -325,22 +511,31 @@
     backBtn: { display: "flex", alignItems: "center", gap: 4, background: "none", border: "1px solid #d1d5db", borderRadius: 8, padding: "6px 14px", fontSize: 14, fontWeight: 600, color: "#374151", cursor: "pointer", fontFamily: "inherit", whiteSpace: "nowrap", flexShrink: 0 },
     topBarCenter: { display: "flex", alignItems: "center", gap: 6, fontSize: 14, overflow: "hidden", whiteSpace: "nowrap" },
     nlSelect: { fontFamily: "inherit", fontSize: 14, fontWeight: 700, padding: "6px 12px", borderRadius: 8, border: "1px solid", background: "#fff", cursor: "pointer", maxWidth: 260 },
+    openBrowserBar: { display: "flex", alignItems: "center", justifyContent: "center", gap: 10, padding: "6px 12px", background: "#fef9f9", borderBottom: "1px solid #f1e5e5", flexShrink: 0, flexWrap: "wrap" },
+    openBrowserBtn: { display: "inline-flex", alignItems: "center", gap: 4, padding: "5px 12px", fontSize: 13, fontWeight: 600, color: "#C62828", background: "#fff", border: "1px solid #e8c4c4", borderRadius: 8, textDecoration: "none", whiteSpace: "nowrap" },
     embedArea: { flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" },
     embedFull: { width: "100%", height: "100%", flex: 1, border: "none" },
     centerMsg: { position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", background: "#fafafa", zIndex: 10, padding: 30, gap: 6, textAlign: "center" },
     centerMsgText: { margin: 0, color: "#718096", fontSize: 15, maxWidth: 320, lineHeight: 1.6 },
     centerBackBtn: { background: "none", border: "2px solid", borderRadius: 10, padding: "10px 22px", fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", marginTop: 6 },
+    spinner: { width: 40, height: 40, border: "3px solid #e2e8f0", borderTopWidth: 3, borderRadius: "50%", animation: "fwspin 0.8s linear infinite" },
 
     /* admin */
     adminOverlay: { position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 500, padding: 20 },
-    adminCard: { background: "#fff", borderRadius: 16, padding: "28px 24px", maxWidth: 400, width: "100%", boxShadow: "0 20px 60px rgba(0,0,0,0.2)", maxHeight: "90vh", overflowY: "auto" },
-    adminInput: { width: "100%", padding: "10px 14px", fontSize: 15, borderRadius: 8, border: "1px solid", fontFamily: "inherit", outline: "none" },
+    adminCard: { background: "#fff", borderRadius: 16, padding: "24px 22px", maxWidth: 400, width: "100%", boxShadow: "0 20px 60px rgba(0,0,0,0.2)", maxHeight: "90vh", overflowY: "auto" },
+    adminInput: { width: "100%", padding: "10px 14px", fontSize: 14, borderRadius: 8, border: "1px solid #d1d5db", fontFamily: "inherit", outline: "none" },
     adminCancelBtn: { flex: 1, padding: "10px", fontSize: 14, fontWeight: 600, borderRadius: 8, border: "1px solid #d1d5db", background: "#fff", color: "#374151", cursor: "pointer", fontFamily: "inherit" },
     adminLoginBtn: { flex: 1, padding: "10px", fontSize: 14, fontWeight: 600, borderRadius: 8, border: "none", background: "#C62828", color: "#fff", cursor: "pointer", fontFamily: "inherit" },
     adminCloseBtn: { background: "none", border: "none", fontSize: 20, color: "#94a3b8", cursor: "pointer", padding: "4px 8px" },
-    adminSectionTitle: { margin: "0 0 8px", fontSize: 14, fontWeight: 700, color: "#1a1a1a", textTransform: "uppercase", letterSpacing: "0.05em" },
+    adminSection: { marginBottom: 20, padding: "16px", background: "#fafafa", borderRadius: 12, border: "1px solid #f1f5f9" },
+    adminSectionTitle: { margin: "0 0 8px", fontSize: 14, fontWeight: 700, color: "#1a1a1a" },
+    adminHint: { margin: "0 0 10px", fontSize: 12, color: "#718096", lineHeight: 1.5 },
     adminLabel: { display: "block", fontSize: 13, fontWeight: 600, color: "#4a5568", marginBottom: 4 },
-    adminUrlBox: { padding: "8px 12px", background: "#f8fafc", borderRadius: 8, border: "1px solid #e2e8f0", fontSize: 12, color: "#64748b", wordBreak: "break-all", lineHeight: 1.5 },
+    adminUrlBox: { padding: "8px 12px", background: "#fff", borderRadius: 8, border: "1px solid #e2e8f0", fontSize: 11, color: "#64748b", wordBreak: "break-all", lineHeight: 1.5 },
+    adminSaveBtn: { marginTop: 10, padding: "10px 20px", fontSize: 14, fontWeight: 700, borderRadius: 8, border: "none", background: "#C62828", color: "#fff", cursor: "pointer", fontFamily: "inherit", width: "100%", opacity: 1 },
+    adminFetchBtn: { padding: "10px 20px", fontSize: 14, fontWeight: 700, borderRadius: 8, border: "1px solid #d1d5db", background: "#fff", color: "#374151", cursor: "pointer", fontFamily: "inherit", flex: 1 },
+    adminTitlePreview: { marginTop: 10, padding: "12px 14px", background: "#f0fdf4", borderRadius: 8, border: "1px solid #bbf7d0" },
+    adminMsg: { marginBottom: 14, padding: "10px 14px", background: "#f0fdf4", borderRadius: 8, border: "1px solid #bbf7d0", fontSize: 14, color: "#166534", textAlign: "center" },
   };
 
   ReactDOM.createRoot(document.getElementById("root")).render(e(App));
