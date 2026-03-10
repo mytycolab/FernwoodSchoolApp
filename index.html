@@ -25,18 +25,18 @@
    *  FERNWOOD MONTESSORI HUB
    *  --------------------------------------------------------
    *  HOW TO UPDATE CONTENT:
-   *  Change the URLs below, then commit & push to GitHub.
+   *  Use the Admin button at the bottom of the app, or
+   *  change the URLs below and commit & push to GitHub.
    *
-   *  PDFs are displayed using Mozilla's PDF.js viewer which
-   *  works reliably with any PDF URL on all devices.
+   *  NEWSLETTERS: Add the newest one at the TOP of the list.
+   *  Keep up to 3 entries. Each needs a label and url.
    *
-   *  For the newsletter, paste the Google Doc URL each week.
-   *  The app auto-converts /edit URLs to /preview.
+   *  PDFs: Paste the direct MPS PDF link.
+   *  Google Docs: Paste the share URL (auto-converts to /preview).
    * ============================================================
    */
   const CONFIG = {
     schoolName: "Fernwood Montessori",
-    /* SCHOOL PHOTO: Replace the URL below with a link to your school's photo */
     schoolPhotoUrl:
       "https://imagescdn.homes.com/i2/HS2V7HUuGZKlACCPq6EHIbE34BoQhQB5H5wzhVzV3kE/114/fernwood-montessori-school-milwaukee-wi-primaryphoto.jpg?p=1",
     breakfastMenuUrl:
@@ -45,8 +45,13 @@
       "https://resources.finalsite.net/images/v1772224302/mpsmilwaukeek12wius/xv7gvhde7wwg4iy4uezb/MarchELLunchMenu-MilwaukeePublicSchools.pdf",
     districtCalendarUrl:
       "https://resources.finalsite.net/images/v1766515266/mpsmilwaukeek12wius/wue9wcski23lt4gxz6ey/mps-district-calendar-2526v8.pdf",
-    newsletterUrl:
-      "https://docs.google.com/document/d/1QlAx1fHovxnU83zJlV424jOlFUFR166o/preview",
+    /* NEWSLETTERS: newest first, up to 3 */
+    newsletters: [
+      { label: "Newsletter #26 — 3/10/26", url: "https://docs.google.com/document/d/1QlAx1fHovxnU83zJlV424jOlFUFR166o/preview" },
+      { label: "Newsletter #25 — 3/3/26",  url: "" },
+      { label: "Newsletter #24 — 2/24/26", url: "" },
+    ],
+    adminPassword: "PirateFernwood",
   };
 
   const e = React.createElement;
@@ -60,55 +65,54 @@
   ];
 
   function getUrl(id) {
-    switch (id) {
-      case "breakfast": return CONFIG.breakfastMenuUrl;
-      case "lunch": return CONFIG.lunchMenuUrl;
-      case "calendar": return CONFIG.districtCalendarUrl;
-      case "newsletter": return CONFIG.newsletterUrl;
-      default: return "";
-    }
+    if (id === "breakfast") return CONFIG.breakfastMenuUrl;
+    if (id === "lunch") return CONFIG.lunchMenuUrl;
+    if (id === "calendar") return CONFIG.districtCalendarUrl;
+    if (id === "newsletter") return (CONFIG.newsletters[0] && CONFIG.newsletters[0].url) || "";
+    return "";
   }
 
-  /* Build the embed URL based on content type */
   function getEmbedUrl(url) {
     if (!url) return "";
-    var isPdf = url.toLowerCase().includes(".pdf");
-    if (isPdf) {
-      /* Use Mozilla's hosted PDF.js viewer — works with any PDF URL */
+    if (url.toLowerCase().includes(".pdf"))
       return "https://mozilla.github.io/pdf.js/web/viewer.html?file=" + encodeURIComponent(url);
-    }
-    /* Google Docs — convert to /preview */
-    if (url.includes("docs.google.com")) {
+    if (url.includes("docs.google.com"))
       return url.replace(/\/edit.*$/, "/preview").replace(/\/pub.*$/, "/preview");
-    }
     return url;
-  }
-
-  function Leaf(props) {
-    return e("svg", {
-      viewBox: "0 0 24 24", fill: "none", stroke: "currentColor",
-      strokeWidth: "1.5", strokeLinecap: "round", strokeLinejoin: "round",
-      style: { width: 20, height: 20, ...props.style }
-    }, e("path", { d: "M12 2C6.5 2 2 6.5 2 12c4-1 7-3 10-6 0 4-2 8-5 11 5-1 9-5 10-10 0-2-1-4-3-5z" }));
   }
 
   /* ══════════════════════════════════════════════════════
      DOCUMENT VIEWER
      ══════════════════════════════════════════════════════ */
   function DocViewer(_ref) {
-    var section = _ref.section, onBack = _ref.onBack;
-    var url = getUrl(section.id);
+    var section = _ref.section, onBack = _ref.onBack, overrideUrl = _ref.overrideUrl;
+    var isNewsletter = section.id === "newsletter";
+
+    /* For newsletter, allow picking from dropdown */
+    var nlState = useState(0);
+    var nlIdx = nlState[0], setNlIdx = nlState[1];
+
+    var url = overrideUrl || (isNewsletter ? (CONFIG.newsletters[nlIdx] && CONFIG.newsletters[nlIdx].url) || "" : getUrl(section.id));
     var hasUrl = url && url.length > 0;
     var embedUrl = getEmbedUrl(url);
 
     return e("div", { style: S.viewerRoot },
-      /* thin top bar */
+      /* top bar */
       e("div", { style: { ...S.topBar, borderBottomColor: section.color + "33" } },
         e("button", { onClick: onBack, style: S.backBtn },
           e("span", { style: { fontSize: 16 } }, "\u2190"), " Home"),
-        e("div", { style: S.topBarCenter },
-          e("span", { style: { fontSize: 16 } }, section.icon),
-          e("span", { style: { fontWeight: 700, color: section.color } }, section.label))),
+        isNewsletter
+          ? /* newsletter dropdown */
+            e("select", {
+              value: nlIdx,
+              onChange: function(ev) { setNlIdx(Number(ev.target.value)); },
+              style: { ...S.nlSelect, color: section.color, borderColor: section.color + "44" },
+            }, CONFIG.newsletters.map(function(nl, i) {
+              return e("option", { key: i, value: i }, nl.label || ("Newsletter " + (i + 1)));
+            }))
+          : e("div", { style: S.topBarCenter },
+              e("span", { style: { fontSize: 16 } }, section.icon),
+              e("span", { style: { fontWeight: 700, color: section.color } }, section.label))),
 
       /* content */
       !hasUrl
@@ -116,10 +120,11 @@
             e("div", { style: S.centerMsg },
               e("p", { style: { margin: 0, fontSize: 48 } }, section.icon),
               e("h3", { style: { margin: "12px 0 6px", fontSize: 20, color: section.color } }, section.label),
-              e("p", { style: S.centerMsgText }, "No link has been added for this item yet. Check back soon!"),
+              e("p", { style: S.centerMsgText }, "No link has been added for this newsletter yet. Check back soon!"),
               e("button", { onClick: onBack, style: { ...S.centerBackBtn, borderColor: section.color, color: section.color } }, "\u2190 Back to Home")))
         : e("div", { style: S.embedArea },
             e("iframe", {
+              key: embedUrl,
               src: embedUrl,
               title: section.label,
               style: S.embedFull,
@@ -128,10 +133,79 @@
   }
 
   /* ══════════════════════════════════════════════════════
+     ADMIN PORTAL
+     ══════════════════════════════════════════════════════ */
+  function AdminPortal(_ref) {
+    var onClose = _ref.onClose;
+    var authState = useState(false);
+    var authed = authState[0], setAuthed = authState[1];
+    var pwState = useState("");
+    var pw = pwState[0], setPw = pwState[1];
+    var errState = useState(false);
+    var err = errState[0], setErr = errState[1];
+
+    function handleLogin() {
+      if (pw === CONFIG.adminPassword) { setAuthed(true); setErr(false); }
+      else { setErr(true); }
+    }
+
+    if (!authed) {
+      return e("div", { style: S.adminOverlay },
+        e("div", { style: S.adminCard },
+          e("h2", { style: { margin: "0 0 6px", fontSize: 20, color: "#C62828" } }, "\u{1F512} Admin Login"),
+          e("p", { style: { margin: "0 0 16px", fontSize: 14, color: "#718096" } }, "Enter the admin password to update links."),
+          e("input", {
+            type: "password", value: pw, placeholder: "Password",
+            onChange: function(ev) { setPw(ev.target.value); setErr(false); },
+            onKeyDown: function(ev) { if (ev.key === "Enter") handleLogin(); },
+            style: { ...S.adminInput, borderColor: err ? "#ef4444" : "#d1d5db" },
+          }),
+          err && e("p", { style: { margin: "4px 0 0", fontSize: 13, color: "#ef4444" } }, "Incorrect password."),
+          e("div", { style: { display: "flex", gap: 10, marginTop: 16 } },
+            e("button", { onClick: onClose, style: S.adminCancelBtn }, "Cancel"),
+            e("button", { onClick: handleLogin, style: S.adminLoginBtn }, "Login"))));
+    }
+
+    return e("div", { style: S.adminOverlay },
+      e("div", { style: { ...S.adminCard, maxWidth: 520 } },
+        e("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 } },
+          e("h2", { style: { margin: 0, fontSize: 20, color: "#C62828" } }, "\u2699\uFE0F Admin Portal"),
+          e("button", { onClick: onClose, style: S.adminCloseBtn }, "\u2715")),
+        e("p", { style: { margin: "0 0 16px", fontSize: 13, color: "#718096", lineHeight: 1.5 } },
+          "To update a link: edit the ", e("code", { style: { background: "#f1f5f9", padding: "2px 5px", borderRadius: 4, fontSize: 12 } }, "index.html"),
+          " file on GitHub. Find the CONFIG section near the top and replace the URL you need to change. Commit and the site updates in 1\u20132 minutes."),
+
+        e("h3", { style: S.adminSectionTitle }, "PDF Links"),
+        adminField("Breakfast Menu URL", CONFIG.breakfastMenuUrl),
+        adminField("Lunch Menu URL", CONFIG.lunchMenuUrl),
+        adminField("District Calendar URL", CONFIG.districtCalendarUrl),
+
+        e("h3", { style: { ...S.adminSectionTitle, marginTop: 18 } }, "Newsletters (newest first)"),
+        CONFIG.newsletters.map(function(nl, i) {
+          return e("div", { key: i, style: { marginBottom: 10 } },
+            e("label", { style: S.adminLabel }, nl.label || ("Newsletter " + (i + 1))),
+            e("div", { style: S.adminUrlBox }, nl.url || "(no URL set)"));
+        }),
+
+        e("div", { style: { marginTop: 18, padding: "12px 14px", background: "#fef2f2", borderRadius: 10, border: "1px solid #fecaca" } },
+          e("p", { style: { margin: 0, fontSize: 13, color: "#991b1b", lineHeight: 1.5 } },
+            e("strong", null, "How to update:"), " Go to ",
+            e("a", { href: "https://github.com/mytycolab/FernwoodSchoolApp", target: "_blank", rel: "noopener noreferrer", style: { color: "#C62828" } }, "your GitHub repo"),
+            " \u2192 click ", e("code", { style: { background: "#fff", padding: "1px 4px", borderRadius: 3, fontSize: 12 } }, "index.html"),
+            " \u2192 pencil icon to edit \u2192 update the URLs in CONFIG \u2192 commit changes."))));
+  }
+
+  function adminField(label, value) {
+    return e("div", { style: { marginBottom: 10 } },
+      e("label", { style: S.adminLabel }, label),
+      e("div", { style: S.adminUrlBox }, value || "(no URL set)"));
+  }
+
+  /* ══════════════════════════════════════════════════════
      LANDING PAGE
      ══════════════════════════════════════════════════════ */
   function Landing(_ref) {
-    var onSelect = _ref.onSelect;
+    var onSelect = _ref.onSelect, onAdmin = _ref.onAdmin;
     var mobileState = useState(false);
     var isMobile = mobileState[0], setMobile = mobileState[1];
 
@@ -193,16 +267,27 @@
               }))),
 
       e("footer", { style: S.footer },
-        e("p", { style: S.footerText }, "Content linked from Milwaukee Public Schools district resources.")));
+        e("p", { style: S.footerText }, "Content linked from Milwaukee Public Schools district resources."),
+        e("button", { onClick: onAdmin, style: S.adminTrigger }, "\u2699\uFE0F Admin")));
   }
 
-  /* ══════════════════════════════════════════════════════ */
+  /* ══════════════════════════════════════════════════════
+     APP
+     ══════════════════════════════════════════════════════ */
   function App() {
     var activeState = useState(null);
     var active = activeState[0], setActive = activeState[1];
+    var adminState = useState(false);
+    var showAdmin = adminState[0], setShowAdmin = adminState[1];
+
     var section = active ? SECTIONS.find(function(s) { return s.id === active; }) : null;
+
+    if (showAdmin) return e(AdminPortal, { onClose: function() { setShowAdmin(false); } });
     if (section) return e(DocViewer, { section: section, onBack: function() { setActive(null); } });
-    return e(Landing, { onSelect: function(id) { setActive(id); } });
+    return e(Landing, {
+      onSelect: function(id) { setActive(id); },
+      onAdmin: function() { setShowAdmin(true); },
+    });
   }
 
   /* ══════════════════════════════════════════════════════
@@ -232,18 +317,30 @@
     mobileCardTitle: { margin: 0, fontSize: 16, fontWeight: 800 },
     mobileCardDesc: { margin: "2px 0 0", fontSize: 12, color: "#94a3b8", lineHeight: 1.3 },
     mobileCardArrow: { fontSize: 28, fontWeight: 300, flexShrink: 0, lineHeight: 1 },
-    footer: { padding: "12px 16px", textAlign: "center", borderTop: "1px solid #e2e8f0", flexShrink: 0 },
+    footer: { padding: "10px 16px", textAlign: "center", borderTop: "1px solid #e2e8f0", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", gap: 12 },
     footerText: { margin: 0, fontSize: 11, color: "#a0aec0" },
+    adminTrigger: { background: "none", border: "1px solid #d1d5db", borderRadius: 6, padding: "3px 10px", fontSize: 11, color: "#94a3b8", cursor: "pointer", fontFamily: "inherit", whiteSpace: "nowrap" },
     viewerRoot: { height: "100%", display: "flex", flexDirection: "column", background: "#fff" },
-    topBar: { display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 12px", borderBottom: "2px solid", flexShrink: 0, background: "#fafcfa", gap: 8 },
+    topBar: { display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 12px", borderBottom: "2px solid", flexShrink: 0, background: "#fafafa", gap: 8 },
     backBtn: { display: "flex", alignItems: "center", gap: 4, background: "none", border: "1px solid #d1d5db", borderRadius: 8, padding: "6px 14px", fontSize: 14, fontWeight: 600, color: "#374151", cursor: "pointer", fontFamily: "inherit", whiteSpace: "nowrap", flexShrink: 0 },
     topBarCenter: { display: "flex", alignItems: "center", gap: 6, fontSize: 14, overflow: "hidden", whiteSpace: "nowrap" },
-    newTabBtn: { display: "flex", alignItems: "center", gap: 3, background: "none", border: "1px solid #d1d5db", borderRadius: 8, padding: "6px 12px", fontSize: 13, fontWeight: 600, color: "#4b5563", textDecoration: "none", whiteSpace: "nowrap", flexShrink: 0, fontFamily: "inherit" },
+    nlSelect: { fontFamily: "inherit", fontSize: 14, fontWeight: 700, padding: "6px 12px", borderRadius: 8, border: "1px solid", background: "#fff", cursor: "pointer", maxWidth: 260 },
     embedArea: { flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" },
     embedFull: { width: "100%", height: "100%", flex: 1, border: "none" },
-    centerMsg: { position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", background: "#fafcfa", zIndex: 10, padding: 30, gap: 6, textAlign: "center" },
+    centerMsg: { position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", background: "#fafafa", zIndex: 10, padding: 30, gap: 6, textAlign: "center" },
     centerMsgText: { margin: 0, color: "#718096", fontSize: 15, maxWidth: 320, lineHeight: 1.6 },
     centerBackBtn: { background: "none", border: "2px solid", borderRadius: 10, padding: "10px 22px", fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", marginTop: 6 },
+
+    /* admin */
+    adminOverlay: { position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 500, padding: 20 },
+    adminCard: { background: "#fff", borderRadius: 16, padding: "28px 24px", maxWidth: 400, width: "100%", boxShadow: "0 20px 60px rgba(0,0,0,0.2)", maxHeight: "90vh", overflowY: "auto" },
+    adminInput: { width: "100%", padding: "10px 14px", fontSize: 15, borderRadius: 8, border: "1px solid", fontFamily: "inherit", outline: "none" },
+    adminCancelBtn: { flex: 1, padding: "10px", fontSize: 14, fontWeight: 600, borderRadius: 8, border: "1px solid #d1d5db", background: "#fff", color: "#374151", cursor: "pointer", fontFamily: "inherit" },
+    adminLoginBtn: { flex: 1, padding: "10px", fontSize: 14, fontWeight: 600, borderRadius: 8, border: "none", background: "#C62828", color: "#fff", cursor: "pointer", fontFamily: "inherit" },
+    adminCloseBtn: { background: "none", border: "none", fontSize: 20, color: "#94a3b8", cursor: "pointer", padding: "4px 8px" },
+    adminSectionTitle: { margin: "0 0 8px", fontSize: 14, fontWeight: 700, color: "#1a1a1a", textTransform: "uppercase", letterSpacing: "0.05em" },
+    adminLabel: { display: "block", fontSize: 13, fontWeight: 600, color: "#4a5568", marginBottom: 4 },
+    adminUrlBox: { padding: "8px 12px", background: "#f8fafc", borderRadius: 8, border: "1px solid #e2e8f0", fontSize: 12, color: "#64748b", wordBreak: "break-all", lineHeight: 1.5 },
   };
 
   ReactDOM.createRoot(document.getElementById("root")).render(e(App));
