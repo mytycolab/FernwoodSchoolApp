@@ -11,9 +11,11 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.3.1/umd/react-dom.production.min.js"></script>
   <style>
     *, *::before, *::after { box-sizing: border-box; }
-    body { margin: 0; font-family: 'DM Sans', 'Segoe UI', sans-serif; background: #f0f4f0; color: #2d3748; }
+    html, body, #root { margin: 0; height: 100%; }
+    body { font-family: 'DM Sans', 'Segoe UI', sans-serif; background: #f0f4f0; color: #2d3748; }
     @keyframes fwspin { to { transform: rotate(360deg); } }
-    @keyframes fwfadein { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
+    @keyframes fwfadein { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: translateY(0); } }
+    @keyframes fwslide { from { opacity: 0; transform: translateX(-8px); } to { opacity: 1; transform: translateX(0); } }
   </style>
 </head>
 <body>
@@ -45,33 +47,26 @@
       "https://docs.google.com/document/d/REPLACE_WITH_REAL_DOC_ID/preview",
   };
 
-  /* ── shortcuts ── */
   const e = React.createElement;
-  const { useState, useEffect, useRef } = React;
+  const { useState, useEffect } = React;
 
-  /* ── sections ── */
   const SECTIONS = [
-    { id: "breakfast", label: "Breakfast", icon: "\u{1F305}", color: "#F59E42" },
-    { id: "lunch",     label: "Lunch",     icon: "\u{1F34E}", color: "#43A047" },
-    { id: "calendar",  label: "Calendar",  icon: "\u{1F4C5}", color: "#5C6BC0" },
-    { id: "newsletter",label: "Newsletter",icon: "\u{1F4F0}", color: "#AB47BC" },
+    { id: "breakfast", label: "Breakfast Menu", icon: "\u{1F305}", color: "#F59E42", desc: "View this month's breakfast menu from MPS." },
+    { id: "lunch",     label: "Lunch Menu",     icon: "\u{1F34E}", color: "#43A047", desc: "View this month's lunch menu from MPS." },
+    { id: "calendar",  label: "District Calendar", icon: "\u{1F4C5}", color: "#5C6BC0", desc: "Milwaukee Public Schools district calendar." },
+    { id: "newsletter",label: "Newsletter",     icon: "\u{1F4F0}", color: "#AB47BC", desc: "The latest Fernwood Montessori newsletter." },
   ];
 
-  const DESCRIPTIONS = {
-    breakfast: "View this month's breakfast menu from MPS.",
-    lunch: "View this month's lunch menu from MPS.",
-    calendar: "Milwaukee Public Schools district calendar.",
-    newsletter: "The latest Fernwood Montessori newsletter.",
-  };
+  function getUrl(id) {
+    switch (id) {
+      case "breakfast": return CONFIG.breakfastMenuUrl;
+      case "lunch": return CONFIG.lunchMenuUrl;
+      case "calendar": return CONFIG.districtCalendarUrl;
+      case "newsletter": return CONFIG.newsletterUrl;
+      default: return "";
+    }
+  }
 
-  const SUBTITLES = {
-    breakfast: "MPS Elementary Breakfast Menu",
-    lunch: "MPS Elementary Lunch Menu",
-    calendar: "Milwaukee Public Schools District Calendar",
-    newsletter: "Fernwood Montessori Weekly Newsletter",
-  };
-
-  /* ── Leaf SVG ── */
   function Leaf(props) {
     return e("svg", {
       viewBox: "0 0 24 24", fill: "none", stroke: "currentColor",
@@ -80,260 +75,180 @@
     }, e("path", { d: "M12 2C6.5 2 2 6.5 2 12c4-1 7-3 10-6 0 4-2 8-5 11 5-1 9-5 10-10 0-2-1-4-3-5z" }));
   }
 
-  /* ── ContentViewer ── */
-  function ContentViewer({ url, title, accent }) {
-    const [status, setStatus] = useState("loading");
-    const isPdf = url.toLowerCase().includes(".pdf");
-    const isGDoc = url.includes("docs.google.com");
-
-    let embedUrl = url;
+  /* ══════════════════════════════════════════════════════
+     DOCUMENT VIEWER — full screen with floating back button
+     ══════════════════════════════════════════════════════ */
+  function DocViewer(_ref) {
+    var section = _ref.section, onBack = _ref.onBack;
+    var url = getUrl(section.id);
+    var isPdf = url.toLowerCase().includes(".pdf");
+    var isGDoc = url.includes("docs.google.com");
+    var embedUrl = url;
     if (isGDoc) embedUrl = url.replace(/\/edit.*$/, "/preview").replace(/\/pub.*$/, "/preview");
-    const gViewer = "https://docs.google.com/gview?url=" + encodeURIComponent(url) + "&embedded=true";
+    var gViewer = "https://docs.google.com/gview?url=" + encodeURIComponent(url) + "&embedded=true";
+    var src = isPdf ? gViewer : embedUrl;
 
-    useEffect(() => {
-      const t = setTimeout(() => { if (status === "loading") setStatus("failed"); }, 6000);
-      return () => clearTimeout(t);
-    }, [status]);
+    var statusState = useState("loading");
+    var status = statusState[0], setStatus = statusState[1];
 
-    return e("div", { style: S.viewerWrap },
-      /* open bar */
-      e("div", { style: { ...S.openBar, borderBottomColor: accent + "22" } },
-        e("div", { style: S.openBarLeft },
-          e("div", { style: { ...S.docIconWrap, background: accent + "15", color: accent } },
-            isPdf ? "\u{1F4C4}" : isGDoc ? "\u{1F4DD}" : "\u{1F4CB}"),
-          e("div", null,
-            e("p", { style: S.openBarTitle }, title),
-            e("p", { style: S.openBarSub }, isPdf ? "PDF Document" : isGDoc ? "Google Document" : "Web Document"))),
-        e("a", { href: url, target: "_blank", rel: "noopener noreferrer", style: { ...S.openBtn, background: accent } },
-          "Open " + title + " \u2197")),
-      /* iframe area */
-      e("div", { style: S.iframeArea },
-        status === "loading" && e("div", { style: S.loadingOverlay },
-          e("div", { style: { ...S.spinner, borderTopColor: accent } }),
-          e("p", { style: S.loadingText }, "Loading preview\u2026")),
-        status === "failed" && e("div", { style: S.fallbackMsg },
-          e("p", { style: { margin: 0, fontSize: 42, lineHeight: 1 } }, isPdf ? "\u{1F4C4}" : "\u{1F4DD}"),
-          e("p", { style: { ...S.fallbackTitle, color: accent } }, "Preview unavailable here"),
-          e("p", { style: S.fallbackSub },
-            "Tap the ", e("strong", null, '"Open ' + title + '"'), " button above to view the full document in a new tab."),
-          e("a", { href: url, target: "_blank", rel: "noopener noreferrer",
-            style: { ...S.openBtnSecondary, color: accent, borderColor: accent } },
-            "Open " + title + " \u2197")),
-        e("iframe", {
-          src: isPdf ? gViewer : embedUrl, title: title,
-          style: {
-            ...S.iframe,
-            opacity: status === "loaded" ? 1 : 0,
-            position: status === "failed" ? "absolute" : "relative",
-            pointerEvents: status === "failed" ? "none" : "auto",
-            height: status === "failed" ? 0 : undefined,
-          },
-          onLoad: () => setStatus("loaded"),
-          onError: () => setStatus("failed"),
-          allow: "autoplay",
-        })));
-  }
-
-  /* ── Main App ── */
-  function FernwoodHub() {
-    const [active, setActive] = useState(null);
-    const [menuOpen, setMenuOpen] = useState(false);
-    const [isMobile, setIsMobile] = useState(false);
-    const contentRef = useRef(null);
-
-    useEffect(() => {
-      const check = () => setIsMobile(window.innerWidth < 768);
-      check();
-      window.addEventListener("resize", check);
-      return () => window.removeEventListener("resize", check);
+    useEffect(function() {
+      var t = setTimeout(function() { setStatus(function(p) { return p === "loading" ? "failed" : p; }); }, 8000);
+      return function() { clearTimeout(t); };
     }, []);
 
-    const section = active ? SECTIONS.find(s => s.id === active) : null;
+    return e("div", { style: S.viewerRoot },
 
-    function nav(id) {
-      setActive(id);
-      setMenuOpen(false);
-      if (contentRef.current) contentRef.current.scrollTo({ top: 0, behavior: "smooth" });
-    }
-
-    function getUrl() {
-      switch (active) {
-        case "breakfast": return CONFIG.breakfastMenuUrl;
-        case "lunch": return CONFIG.lunchMenuUrl;
-        case "calendar": return CONFIG.districtCalendarUrl;
-        case "newsletter": return CONFIG.newsletterUrl;
-        default: return "";
-      }
-    }
-
-    /* ── sidebar nav buttons ── */
-    function navBtn(id, icon, label, color) {
-      const isActive = active === id;
-      return e("button", {
-        key: id || "home",
-        onClick: () => nav(id),
-        style: {
-          ...S.navBtn,
-          background: isActive ? (color || "#43A047") + "18" : "transparent",
-          borderLeft: isActive ? "3px solid " + (color || "#43A047") : "3px solid transparent",
-          color: isActive ? (color || "#43A047") : "#4a5568",
-          fontWeight: isActive ? 700 : 500,
-        },
-      }, e("span", { style: S.navIcon }, icon), label);
-    }
-
-    /* ── landing card ── */
-    function card(s, i) {
-      return e("button", {
-        key: s.id,
-        onClick: () => nav(s.id),
-        style: { ...S.card, animationDelay: (i * 0.08) + "s" },
-        onMouseEnter: function(ev) {
-          ev.currentTarget.style.transform = "translateY(-4px)";
-          ev.currentTarget.style.boxShadow = "0 8px 24px " + s.color + "22";
-          ev.currentTarget.style.borderColor = s.color;
-        },
-        onMouseLeave: function(ev) {
-          ev.currentTarget.style.transform = "translateY(0)";
-          ev.currentTarget.style.boxShadow = "0 2px 8px rgba(0,0,0,0.06)";
-          ev.currentTarget.style.borderColor = "#e2e8f0";
-        },
+      /* floating back button — top left */
+      e("button", {
+        onClick: onBack, style: S.floatingBack,
+        onMouseEnter: function(ev) { ev.currentTarget.style.background = "#fff"; ev.currentTarget.style.boxShadow = "0 4px 20px rgba(0,0,0,0.18)"; },
+        onMouseLeave: function(ev) { ev.currentTarget.style.background = "rgba(255,255,255,0.95)"; ev.currentTarget.style.boxShadow = "0 2px 12px rgba(0,0,0,0.12)"; },
       },
-        e("div", { style: { ...S.cardIconWrap, background: s.color + "15", color: s.color } },
-          e("span", { style: S.cardEmoji }, s.icon)),
-        e("h3", { style: { ...S.cardTitle, color: s.color } }, s.label),
-        e("p", { style: S.cardDesc }, DESCRIPTIONS[s.id]),
-        e("span", { style: { ...S.cardArrow, color: s.color } }, "View \u2192"));
-    }
+        e("span", { style: { fontSize: 18, lineHeight: 1 } }, "\u2190"),
+        e("span", { style: { fontWeight: 700 } }, "Home")),
 
-    /* ── render ── */
-    return e("div", { style: S.root },
+      /* floating title pill — top center */
+      e("div", { style: { ...S.floatingTitle, background: section.color } },
+        e("span", { style: { fontSize: 16 } }, section.icon),
+        e("span", { style: { fontWeight: 700 } }, section.label)),
+
+      /* floating "open in new tab" — top right */
+      e("a", {
+        href: url, target: "_blank", rel: "noopener noreferrer", style: S.floatingOpen,
+        onMouseEnter: function(ev) { ev.currentTarget.style.background = "#fff"; },
+        onMouseLeave: function(ev) { ev.currentTarget.style.background = "rgba(255,255,255,0.95)"; },
+      }, "New tab \u2197"),
+
+      /* loading state */
+      status === "loading" && e("div", { style: S.loadingOverlay },
+        e("div", { style: { ...S.spinner, borderTopColor: section.color } }),
+        e("p", { style: S.loadingText }, "Loading " + section.label + "\u2026")),
+
+      /* failed state */
+      status === "failed" && e("div", { style: S.failedOverlay },
+        e("p", { style: { margin: 0, fontSize: 48 } }, section.icon),
+        e("h3", { style: { margin: "12px 0 4px", fontSize: 20, color: section.color } }, section.label),
+        e("p", { style: S.failedText },
+          "This document can\u2019t be previewed here. Tap below to open it directly."),
+        e("a", { href: url, target: "_blank", rel: "noopener noreferrer",
+          style: { ...S.failedBtn, background: section.color } },
+          "Open " + section.label + " \u2197"),
+        e("button", { onClick: onBack, style: S.failedBackBtn }, "\u2190 Back to Home")),
+
+      /* iframe — takes up full screen behind the floating buttons */
+      e("iframe", {
+        src: src, title: section.label,
+        style: { ...S.fullIframe, opacity: status === "loaded" ? 1 : 0, pointerEvents: status === "loaded" ? "auto" : "none" },
+        onLoad: function() { setStatus("loaded"); },
+        onError: function() { setStatus("failed"); },
+      }));
+  }
+
+  /* ══════════════════════════════════════════════════════
+     LANDING PAGE
+     ══════════════════════════════════════════════════════ */
+  function Landing(_ref) {
+    var onSelect = _ref.onSelect;
+
+    return e("div", { style: S.landingRoot },
       /* header */
       e("header", { style: S.header },
-        e("div", { style: S.headerInner },
-          e(Leaf, { style: { color: "#81C784", position: "absolute", top: 12, left: 16, opacity: 0.35, transform: "rotate(-30deg)" } }),
-          e(Leaf, { style: { color: "#A5D6A7", position: "absolute", top: 8, right: 60, opacity: 0.25, transform: "rotate(15deg) scale(1.3)" } }),
-          e("div", { style: S.headerContent },
-            e("div", { style: { ...S.logoArea, cursor: "pointer" }, onClick: () => nav(null), role: "button" },
-              e("div", { style: S.logoCircle },
-                e("span", { style: S.logoEmoji }, "\u{1F33F}")),
-              e("div", null,
-                e("h1", { style: S.schoolName }, CONFIG.schoolName),
-                e("p", { style: S.subtitle }, "Student & Family Hub"))),
-            isMobile && e("button", {
-              onClick: () => setMenuOpen(!menuOpen), style: S.hamburger, "aria-label": "Toggle menu",
+        e(Leaf, { style: { color: "#81C784", position: "absolute", top: 14, left: 18, opacity: 0.3, transform: "rotate(-30deg)" } }),
+        e(Leaf, { style: { color: "#A5D6A7", position: "absolute", top: 10, right: 50, opacity: 0.2, transform: "rotate(15deg) scale(1.4)" } }),
+        e("div", { style: S.headerContent },
+          e("div", { style: S.logoCircle }, e("span", { style: { fontSize: 24 } }, "\u{1F33F}")),
+          e("div", null,
+            e("h1", { style: S.schoolName }, CONFIG.schoolName),
+            e("p", { style: S.subtitle }, "Student & Family Hub")))),
+
+      /* main */
+      e("main", { style: S.landingMain },
+        e("div", { style: S.welcomeSection },
+          e("h2", { style: S.welcomeTitle }, "Welcome!"),
+          e("p", { style: S.welcomeText }, "Tap any card below to view it.")),
+
+        e("div", { style: S.cardGrid },
+          SECTIONS.map(function(s, i) {
+            return e("button", {
+              key: s.id, onClick: function() { onSelect(s.id); },
+              style: { ...S.card, animationDelay: (i * 0.07) + "s" },
+              onMouseEnter: function(ev) {
+                ev.currentTarget.style.transform = "translateY(-5px)";
+                ev.currentTarget.style.boxShadow = "0 10px 30px " + s.color + "25";
+                ev.currentTarget.style.borderColor = s.color;
+              },
+              onMouseLeave: function(ev) {
+                ev.currentTarget.style.transform = "translateY(0)";
+                ev.currentTarget.style.boxShadow = "0 2px 8px rgba(0,0,0,0.06)";
+                ev.currentTarget.style.borderColor = "#e2e8f0";
+              },
             },
-              e("span", { style: { ...S.hamLine, transform: menuOpen ? "rotate(45deg) translateY(6px)" : "none" } }),
-              e("span", { style: { ...S.hamLine, opacity: menuOpen ? 0 : 1 } }),
-              e("span", { style: { ...S.hamLine, transform: menuOpen ? "rotate(-45deg) translateY(-6px)" : "none" } }))))),
+              e("div", { style: { ...S.cardIconWrap, background: s.color + "14" } },
+                e("span", { style: { fontSize: 32 } }, s.icon)),
+              e("h3", { style: { ...S.cardTitle, color: s.color } }, s.label),
+              e("p", { style: S.cardDesc }, s.desc),
+              e("span", { style: { ...S.cardCta, color: s.color } }, "Open \u2192"));
+          }))),
 
-      /* body */
-      e("div", { style: S.body },
-        /* sidebar */
-        e("nav", {
-          style: {
-            ...S.sidebar,
-            ...(isMobile ? {
-              position: "fixed", top: 0, left: 0, bottom: 0, zIndex: 900,
-              transform: menuOpen ? "translateX(0)" : "translateX(-110%)",
-              transition: "transform 0.3s cubic-bezier(.4,0,.2,1)",
-              boxShadow: menuOpen ? "4px 0 24px rgba(0,0,0,0.18)" : "none",
-              width: 260, paddingTop: 80,
-            } : {}),
-          },
-        },
-          e("div", { style: S.navLabel },
-            e(Leaf, { style: { color: "#66BB6A", marginRight: 6 } }), "Navigation"),
-          navBtn(null, "\u{1F3E0}", "Home", "#43A047"),
-          e("div", { style: { height: 4 } }),
-          SECTIONS.map(s => navBtn(s.id, s.icon, s.label, s.color)),
-          e("div", { style: S.sidebarFooter },
-            e("p", { style: S.footerNote }, "Content is linked from MPS district resources. URLs can be updated in the app config."))),
+      /* footer */
+      e("footer", { style: S.footer },
+        e("p", { style: S.footerText }, "Content linked from Milwaukee Public Schools district resources.")));
+  }
 
-        /* mobile overlay */
-        isMobile && menuOpen && e("div", { style: S.overlay, onClick: () => setMenuOpen(false) }),
+  /* ══════════════════════════════════════════════════════
+     APP
+     ══════════════════════════════════════════════════════ */
+  function App() {
+    var activeState = useState(null);
+    var active = activeState[0], setActive = activeState[1];
+    var section = active ? SECTIONS.find(function(s) { return s.id === active; }) : null;
 
-        /* main */
-        e("main", { ref: contentRef, style: S.main },
-          !active
-            ? /* landing */
-              e("div", { style: S.landing },
-                e("div", { style: S.welcomeSection },
-                  e("h2", { style: S.welcomeTitle }, "Welcome to " + CONFIG.schoolName),
-                  e("p", { style: S.welcomeText },
-                    "Your one-stop hub for menus, the district calendar, and the weekly newsletter. Tap any card below to get started.")),
-                e("div", { style: S.cardGrid }, SECTIONS.map((s, i) => card(s, i))))
-            : /* detail */
-              e(React.Fragment, null,
-                e("div", { style: S.contentHeader },
-                  e("button", { onClick: () => nav(null), style: S.backBtn }, "\u2190 Home"),
-                  e("span", { style: { ...S.contentIcon, background: section.color + "20", color: section.color } }, section.icon),
-                  e("div", null,
-                    e("h2", { style: { ...S.contentTitle, color: section.color } }, section.label),
-                    e("p", { style: S.contentSubtitle }, SUBTITLES[active]))),
-                e(ContentViewer, { key: active, url: getUrl(), title: section.label, accent: section.color })))));
+    if (section) {
+      return e(DocViewer, { section: section, onBack: function() { setActive(null); } });
+    }
+    return e(Landing, { onSelect: function(id) { setActive(id); } });
   }
 
   /* ══════════════════════════════════════════════════════
      STYLES
      ══════════════════════════════════════════════════════ */
-  const S = {
-    root: { fontFamily: "'DM Sans','Segoe UI',sans-serif", background: "#f0f4f0", minHeight: "100vh", display: "flex", flexDirection: "column", color: "#2d3748", overflow: "hidden", height: "100vh" },
-    header: { background: "linear-gradient(135deg,#2E7D32 0%,#388E3C 40%,#43A047 100%)", color: "#fff", position: "relative", zIndex: 1000, boxShadow: "0 2px 12px rgba(46,125,50,0.25)" },
-    headerInner: { position: "relative", maxWidth: 1280, margin: "0 auto", padding: "14px 20px" },
-    headerContent: { display: "flex", alignItems: "center", justifyContent: "space-between", position: "relative", zIndex: 2 },
-    logoArea: { display: "flex", alignItems: "center", gap: 14 },
-    logoCircle: { width: 46, height: 46, borderRadius: "50%", background: "rgba(255,255,255,0.2)", display: "flex", alignItems: "center", justifyContent: "center", backdropFilter: "blur(4px)", border: "2px solid rgba(255,255,255,0.3)", flexShrink: 0 },
-    logoEmoji: { fontSize: 22 },
-    schoolName: { margin: 0, fontSize: 20, fontWeight: 800, letterSpacing: "-0.02em", lineHeight: 1.2, textShadow: "0 1px 3px rgba(0,0,0,0.15)" },
-    subtitle: { margin: 0, fontSize: 12, fontWeight: 500, opacity: 0.85, letterSpacing: "0.04em", textTransform: "uppercase" },
-    hamburger: { background: "rgba(255,255,255,0.15)", border: "1px solid rgba(255,255,255,0.25)", borderRadius: 8, padding: "8px 10px", cursor: "pointer", display: "flex", flexDirection: "column", gap: 4 },
-    hamLine: { display: "block", width: 22, height: 2, background: "#fff", borderRadius: 2, transition: "all 0.25s ease" },
-    body: { display: "flex", flex: 1, overflow: "hidden" },
-    sidebar: { width: 230, background: "#fff", borderRight: "1px solid #e2e8f0", padding: "20px 12px", display: "flex", flexDirection: "column", gap: 4, flexShrink: 0, overflowY: "auto" },
-    navLabel: { display: "flex", alignItems: "center", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: "#94a3b8", padding: "0 12px 10px", borderBottom: "1px solid #f1f5f9", marginBottom: 8 },
-    navBtn: { display: "flex", alignItems: "center", gap: 10, width: "100%", padding: "12px 14px", border: "none", borderRadius: "0 8px 8px 0", cursor: "pointer", fontSize: 15, textAlign: "left", transition: "all 0.15s ease", lineHeight: 1.3, fontFamily: "inherit", background: "none" },
-    navIcon: { fontSize: 18, width: 26, textAlign: "center", flexShrink: 0 },
-    sidebarFooter: { marginTop: "auto", padding: "16px 12px 4px", borderTop: "1px solid #f1f5f9" },
-    footerNote: { fontSize: 11, color: "#a0aec0", lineHeight: 1.5, margin: 0 },
-    overlay: { position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(0,0,0,0.35)", zIndex: 899 },
-    main: { flex: 1, padding: "24px 28px", overflowY: "auto", display: "flex", flexDirection: "column", gap: 20 },
-    contentHeader: { display: "flex", alignItems: "center", gap: 14 },
-    backBtn: { background: "none", border: "1px solid #cbd5e0", borderRadius: 8, padding: "6px 14px", fontSize: 13, fontWeight: 600, color: "#4a5568", cursor: "pointer", fontFamily: "inherit", flexShrink: 0 },
-    landing: { flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "20px 0" },
-    welcomeSection: { textAlign: "center", maxWidth: 500, marginBottom: 32 },
-    welcomeTitle: { margin: 0, fontSize: 26, fontWeight: 800, color: "#2E7D32", letterSpacing: "-0.02em" },
-    welcomeText: { margin: "10px 0 0", fontSize: 15, color: "#718096", lineHeight: 1.6 },
-    cardGrid: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 18, width: "100%", maxWidth: 720 },
-    card: { background: "#fff", border: "1px solid #e2e8f0", borderRadius: 16, padding: "28px 22px 22px", cursor: "pointer", textAlign: "center", display: "flex", flexDirection: "column", alignItems: "center", gap: 8, transition: "all 0.2s ease", boxShadow: "0 2px 8px rgba(0,0,0,0.06)", fontFamily: "inherit", animation: "fwfadein 0.4s ease both" },
-    cardIconWrap: { width: 56, height: 56, borderRadius: 14, display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 4 },
-    cardEmoji: { fontSize: 28 },
-    cardTitle: { margin: 0, fontSize: 17, fontWeight: 800, letterSpacing: "-0.01em" },
+  var S = {
+    /* landing */
+    landingRoot: { minHeight: "100vh", display: "flex", flexDirection: "column" },
+    header: { background: "linear-gradient(135deg,#2E7D32 0%,#388E3C 40%,#43A047 100%)", color: "#fff", padding: "18px 24px", position: "relative", boxShadow: "0 2px 12px rgba(46,125,50,0.25)" },
+    headerContent: { display: "flex", alignItems: "center", gap: 14, position: "relative", zIndex: 2, maxWidth: 800, margin: "0 auto" },
+    logoCircle: { width: 48, height: 48, borderRadius: "50%", background: "rgba(255,255,255,0.2)", display: "flex", alignItems: "center", justifyContent: "center", border: "2px solid rgba(255,255,255,0.3)", flexShrink: 0 },
+    schoolName: { margin: 0, fontSize: 22, fontWeight: 800, letterSpacing: "-0.02em", textShadow: "0 1px 3px rgba(0,0,0,0.15)" },
+    subtitle: { margin: "2px 0 0", fontSize: 12, fontWeight: 500, opacity: 0.85, letterSpacing: "0.04em", textTransform: "uppercase" },
+    landingMain: { flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "32px 20px" },
+    welcomeSection: { textAlign: "center", marginBottom: 28 },
+    welcomeTitle: { margin: 0, fontSize: 28, fontWeight: 800, color: "#2E7D32" },
+    welcomeText: { margin: "8px 0 0", fontSize: 15, color: "#718096" },
+    cardGrid: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 16, width: "100%", maxWidth: 720 },
+    card: { background: "#fff", border: "1px solid #e2e8f0", borderRadius: 16, padding: "28px 18px 22px", cursor: "pointer", textAlign: "center", display: "flex", flexDirection: "column", alignItems: "center", gap: 6, transition: "all 0.2s ease", boxShadow: "0 2px 8px rgba(0,0,0,0.06)", fontFamily: "inherit", animation: "fwfadein 0.4s ease both" },
+    cardIconWrap: { width: 60, height: 60, borderRadius: 16, display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 4 },
+    cardTitle: { margin: 0, fontSize: 16, fontWeight: 800 },
     cardDesc: { margin: 0, fontSize: 13, color: "#718096", lineHeight: 1.5 },
-    cardArrow: { marginTop: 4, fontSize: 13, fontWeight: 700 },
-    contentIcon: { width: 48, height: 48, borderRadius: 12, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 24, flexShrink: 0 },
-    contentTitle: { margin: 0, fontSize: 22, fontWeight: 800, letterSpacing: "-0.01em" },
-    contentSubtitle: { margin: "2px 0 0", fontSize: 13, color: "#718096", fontWeight: 500 },
-    viewerWrap: { flex: 1, display: "flex", flexDirection: "column", background: "#fff", borderRadius: 14, border: "1px solid #e2e8f0", overflow: "hidden", position: "relative", minHeight: 500 },
-    openBar: { display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 18px", borderBottom: "1px solid", gap: 12, flexWrap: "wrap" },
-    openBarLeft: { display: "flex", alignItems: "center", gap: 12 },
-    docIconWrap: { width: 40, height: 40, borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, flexShrink: 0 },
-    openBarTitle: { margin: 0, fontSize: 14, fontWeight: 700, color: "#2d3748" },
-    openBarSub: { margin: "1px 0 0", fontSize: 12, color: "#a0aec0", fontWeight: 500 },
-    openBtn: { display: "inline-block", padding: "10px 22px", color: "#fff", borderRadius: 8, textDecoration: "none", fontWeight: 600, fontSize: 14, whiteSpace: "nowrap", flexShrink: 0 },
-    openBtnSecondary: { display: "inline-block", padding: "10px 22px", background: "transparent", borderRadius: 8, textDecoration: "none", fontWeight: 600, fontSize: 14, border: "2px solid", whiteSpace: "nowrap" },
-    iframeArea: { flex: 1, position: "relative", display: "flex", flexDirection: "column", minHeight: 400 },
-    iframe: { width: "100%", flex: 1, border: "none", minHeight: 400, transition: "opacity 0.3s ease" },
-    loadingOverlay: { position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", background: "#fafcfa", zIndex: 5 },
-    spinner: { width: 36, height: 36, border: "3px solid #e2e8f0", borderTopWidth: 3, borderRadius: "50%", animation: "fwspin 0.8s linear infinite" },
-    loadingText: { marginTop: 12, fontSize: 14, color: "#718096", fontWeight: 500 },
-    fallbackMsg: { display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "60px 30px", textAlign: "center", flex: 1, gap: 8 },
-    fallbackTitle: { margin: 0, fontSize: 18, fontWeight: 700 },
-    fallbackSub: { margin: 0, fontSize: 14, color: "#718096", maxWidth: 340, lineHeight: 1.6 },
+    cardCta: { marginTop: 6, fontSize: 14, fontWeight: 700 },
+    footer: { padding: "14px 20px", textAlign: "center", borderTop: "1px solid #e2e8f0" },
+    footerText: { margin: 0, fontSize: 12, color: "#a0aec0" },
+
+    /* viewer */
+    viewerRoot: { position: "fixed", inset: 0, background: "#f5f5f5", display: "flex", flexDirection: "column", zIndex: 100 },
+    floatingBack: { position: "fixed", top: 12, left: 12, zIndex: 200, display: "flex", alignItems: "center", gap: 6, background: "rgba(255,255,255,0.95)", border: "1px solid #e2e8f0", borderRadius: 10, padding: "8px 16px", fontSize: 14, color: "#2d3748", cursor: "pointer", fontFamily: "inherit", boxShadow: "0 2px 12px rgba(0,0,0,0.12)", transition: "all 0.15s ease", animation: "fwslide 0.3s ease" },
+    floatingTitle: { position: "fixed", top: 12, left: "50%", transform: "translateX(-50%)", zIndex: 200, display: "flex", alignItems: "center", gap: 8, color: "#fff", borderRadius: 10, padding: "8px 18px", fontSize: 14, boxShadow: "0 2px 12px rgba(0,0,0,0.15)", animation: "fwfadein 0.3s ease", whiteSpace: "nowrap" },
+    floatingOpen: { position: "fixed", top: 12, right: 12, zIndex: 200, display: "flex", alignItems: "center", gap: 4, background: "rgba(255,255,255,0.95)", border: "1px solid #e2e8f0", borderRadius: 10, padding: "8px 16px", fontSize: 13, fontWeight: 600, color: "#4a5568", textDecoration: "none", boxShadow: "0 2px 12px rgba(0,0,0,0.12)", transition: "all 0.15s ease", animation: "fwslide 0.3s ease", fontFamily: "inherit" },
+    fullIframe: { flex: 1, width: "100%", border: "none", transition: "opacity 0.3s ease" },
+    loadingOverlay: { position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", background: "#fafcfa", zIndex: 50 },
+    spinner: { width: 40, height: 40, border: "3px solid #e2e8f0", borderTopWidth: 3, borderRadius: "50%", animation: "fwspin 0.8s linear infinite" },
+    loadingText: { marginTop: 14, fontSize: 15, color: "#718096", fontWeight: 500 },
+    failedOverlay: { position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", background: "#fafcfa", zIndex: 50, padding: 30, gap: 10 },
+    failedText: { margin: 0, color: "#718096", fontSize: 15, maxWidth: 320, lineHeight: 1.6, textAlign: "center" },
+    failedBtn: { display: "inline-block", padding: "12px 28px", color: "#fff", borderRadius: 10, textDecoration: "none", fontWeight: 700, fontSize: 15, marginTop: 8 },
+    failedBackBtn: { background: "none", border: "1px solid #cbd5e0", borderRadius: 10, padding: "10px 22px", fontSize: 14, fontWeight: 600, color: "#4a5568", cursor: "pointer", fontFamily: "inherit", marginTop: 4 },
   };
 
-  /* ── mount ── */
-  ReactDOM.createRoot(document.getElementById("root")).render(e(FernwoodHub));
+  ReactDOM.createRoot(document.getElementById("root")).render(e(App));
   </script>
 </body>
 </html>
