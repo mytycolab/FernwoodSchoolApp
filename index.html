@@ -9,23 +9,17 @@
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
   <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.3.1/umd/react.production.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.3.1/umd/react-dom.production.min.js"></script>
-  <!-- PDF.js for rendering PDFs directly in the browser -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
   <style>
     *, *::before, *::after { box-sizing: border-box; }
     html, body, #root { margin: 0; height: 100%; overflow: hidden; }
     body { font-family: 'DM Sans', 'Segoe UI', sans-serif; background: #f0f4f0; color: #2d3748; }
     @keyframes fwspin { to { transform: rotate(360deg); } }
     @keyframes fwfadein { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-    .pdf-canvas { display: block; margin: 0 auto 12px; max-width: 100%; height: auto !important; }
   </style>
 </head>
 <body>
   <div id="root"></div>
   <script>
-  /* Set PDF.js worker */
-  pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
-
   /*
    * ============================================================
    *  FERNWOOD MONTESSORI HUB
@@ -52,7 +46,7 @@
   };
 
   const e = React.createElement;
-  const { useState, useEffect, useRef, useCallback } = React;
+  const { useState, useEffect } = React;
 
   const SECTIONS = [
     { id: "breakfast", label: "Breakfast Menu", icon: "\u{1F305}", color: "#F59E42", desc: "This month's MPS breakfast menu" },
@@ -80,146 +74,19 @@
   }
 
   /* ══════════════════════════════════════════════════════
-     PDF RENDERER — multi-strategy: direct → proxy → iframe
-     ══════════════════════════════════════════════════════ */
-  function PdfRenderer(_ref) {
-    var url = _ref.url, color = _ref.color;
-    var containerRef = useRef(null);
-    var statusState = useState("loading"); // loading | loaded | iframe-fallback | failed
-    var status = statusState[0], setStatus = statusState[1];
-    var progressState = useState("");
-    var progress = progressState[0], setProgress = progressState[1];
-
-    /* Render a loaded pdf document into canvases */
-    async function renderPages(pdf, container) {
-      container.innerHTML = "";
-      var numPages = pdf.numPages;
-      var dpr = window.devicePixelRatio || 1;
-      for (var i = 1; i <= numPages; i++) {
-        setProgress("Rendering page " + i + " of " + numPages + "\u2026");
-        var page = await pdf.getPage(i);
-        var containerWidth = container.clientWidth - 24;
-        var viewport = page.getViewport({ scale: 1 });
-        /* Scale to fit container width */
-        var baseScale = containerWidth / viewport.width;
-        /* Render at higher resolution for sharp text on HiDPI screens */
-        var hiResScale = baseScale * dpr;
-        var sv = page.getViewport({ scale: hiResScale });
-
-        var canvas = document.createElement("canvas");
-        canvas.className = "pdf-canvas";
-        /* Canvas internal resolution = high res */
-        canvas.width = sv.width;
-        canvas.height = sv.height;
-        /* CSS display size = logical size (sharp on all screens) */
-        canvas.style.width = containerWidth + "px";
-        canvas.style.height = (sv.height / dpr) + "px";
-        container.appendChild(canvas);
-        await page.render({ canvasContext: canvas.getContext("2d"), viewport: sv }).promise;
-      }
-    }
-
-    useEffect(function() {
-      if (!url) return;
-      var cancelled = false;
-
-      async function tryLoad() {
-        var container = containerRef.current;
-        if (!container) return;
-
-        /* Strategy 1: Direct PDF.js load */
-        try {
-          setProgress("Downloading PDF\u2026");
-          var pdf = await pdfjsLib.getDocument({ url: url, withCredentials: false }).promise;
-          if (cancelled) return;
-          await renderPages(pdf, container);
-          if (!cancelled) setStatus("loaded");
-          return;
-        } catch (e1) {
-          console.log("Direct PDF load failed, trying proxy\u2026", e1.message);
-        }
-
-        /* Strategy 2: Load via CORS proxy */
-        if (cancelled) return;
-        try {
-          setProgress("Retrying via proxy\u2026");
-          var proxyUrl = "https://corsproxy.io/?" + encodeURIComponent(url);
-          var pdf2 = await pdfjsLib.getDocument({ url: proxyUrl, withCredentials: false }).promise;
-          if (cancelled) return;
-          await renderPages(pdf2, container);
-          if (!cancelled) setStatus("loaded");
-          return;
-        } catch (e2) {
-          console.log("Proxy PDF load failed, trying iframe\u2026", e2.message);
-        }
-
-        /* Strategy 3: Google Docs viewer iframe fallback */
-        if (!cancelled) setStatus("iframe-fallback");
-      }
-
-      setStatus("loading");
-      tryLoad();
-      return function() { cancelled = true; };
-    }, [url]);
-
-    var gViewer = "https://docs.google.com/gview?url=" + encodeURIComponent(url) + "&embedded=true";
-
-    return e("div", { style: { flex: 1, overflow: "auto", background: "#e8e8e8", position: "relative" } },
-      /* loading spinner */
-      status === "loading" && e("div", { style: S.centerMsg },
-        e("div", { style: { ...S.spinner, borderTopColor: color } }),
-        e("p", { style: { marginTop: 14, fontSize: 15, color: "#718096" } }, progress)),
-
-      /* iframe fallback */
-      status === "iframe-fallback" && e("iframe", {
-        src: gViewer, title: "PDF Viewer",
-        style: { position: "absolute", top: 0, left: 0, width: "100%", height: "100%", border: "none" }
-      }),
-
-      /* rendered PDF canvases */
-      e("div", {
-        ref: containerRef,
-        style: { padding: "12px 0", display: status === "loaded" ? "block" : "none" }
-      }));
-  }
-
-  /* ══════════════════════════════════════════════════════
-     IFRAME RENDERER — for Google Docs
-     ══════════════════════════════════════════════════════ */
-  function IframeRenderer(_ref) {
-    var url = _ref.url, title = _ref.title, color = _ref.color;
-    var statusState = useState("loading");
-    var status = statusState[0], setStatus = statusState[1];
-
-    var embedUrl = url;
-    if (url.includes("docs.google.com")) {
-      embedUrl = url.replace(/\/edit.*$/, "/preview").replace(/\/pub.*$/, "/preview");
-    }
-
-    useEffect(function() {
-      var t = setTimeout(function() { setStatus(function(p) { return p === "loading" ? "loaded" : p; }); }, 4000);
-      return function() { clearTimeout(t); };
-    }, []);
-
-    return e("div", { style: { flex: 1, position: "relative", display: "flex", flexDirection: "column" } },
-      status === "loading" && e("div", { style: S.centerMsg },
-        e("div", { style: { ...S.spinner, borderTopColor: color } }),
-        e("p", { style: { marginTop: 14, fontSize: 15, color: "#718096" } }, "Loading " + title + "\u2026")),
-      e("iframe", {
-        src: embedUrl, title: title,
-        style: { flex: 1, width: "100%", border: "none", opacity: status === "loading" ? 0 : 1, transition: "opacity 0.3s" },
-        onLoad: function() { setStatus("loaded"); },
-      }));
-  }
-
-  /* ══════════════════════════════════════════════════════
-     DOCUMENT VIEWER — top bar + full content
+     DOCUMENT VIEWER
+     Uses the browser's native PDF viewer via <object> + <iframe>
+     or direct iframe for Google Docs
      ══════════════════════════════════════════════════════ */
   function DocViewer(_ref) {
     var section = _ref.section, onBack = _ref.onBack;
     var url = getUrl(section.id);
     var hasUrl = url && url.length > 0;
     var isPdf = hasUrl && url.toLowerCase().includes(".pdf");
+    var isGDoc = hasUrl && url.includes("docs.google.com");
+
+    var embedUrl = url;
+    if (isGDoc) embedUrl = url.replace(/\/edit.*$/, "/preview").replace(/\/pub.*$/, "/preview");
 
     return e("div", { style: S.viewerRoot },
 
@@ -236,15 +103,37 @@
 
       /* content area */
       !hasUrl
-        ? e("div", { style: { flex: 1, position: "relative" } },
+        ? /* no URL */
+          e("div", { style: { flex: 1, position: "relative" } },
             e("div", { style: S.centerMsg },
               e("p", { style: { margin: 0, fontSize: 48 } }, section.icon),
               e("h3", { style: { margin: "12px 0 6px", fontSize: 20, color: section.color } }, section.label),
               e("p", { style: S.centerMsgText }, "No link has been added for this item yet. Check back soon!"),
               e("button", { onClick: onBack, style: { ...S.centerBackBtn, borderColor: section.color, color: section.color } }, "\u2190 Back to Home")))
+
         : isPdf
-          ? e(PdfRenderer, { url: url, color: section.color })
-          : e(IframeRenderer, { url: url, title: section.label, color: section.color }));
+          ? /* PDF: use <object> with <iframe> fallback inside it */
+            e("div", { style: S.embedArea },
+              e("object", {
+                data: url,
+                type: "application/pdf",
+                style: S.embedFull,
+              },
+                /* fallback if <object> fails: try iframe with Google viewer */
+                e("iframe", {
+                  src: "https://docs.google.com/gview?url=" + encodeURIComponent(url) + "&embedded=true",
+                  title: section.label,
+                  style: S.embedFull,
+                }),
+              ))
+
+          : /* Google Doc or other: direct iframe */
+            e("div", { style: S.embedArea },
+              e("iframe", {
+                src: embedUrl,
+                title: section.label,
+                style: S.embedFull,
+              })));
   }
 
   /* ══════════════════════════════════════════════════════
@@ -356,15 +245,19 @@
     mobileCardArrow: { fontSize: 28, fontWeight: 300, flexShrink: 0, lineHeight: 1 },
     footer: { padding: "12px 16px", textAlign: "center", borderTop: "1px solid #e2e8f0", flexShrink: 0 },
     footerText: { margin: 0, fontSize: 11, color: "#a0aec0" },
+
     viewerRoot: { height: "100%", display: "flex", flexDirection: "column", background: "#fff" },
     topBar: { display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 12px", borderBottom: "2px solid", flexShrink: 0, background: "#fafcfa", gap: 8 },
     backBtn: { display: "flex", alignItems: "center", gap: 4, background: "none", border: "1px solid #d1d5db", borderRadius: 8, padding: "6px 14px", fontSize: 14, fontWeight: 600, color: "#374151", cursor: "pointer", fontFamily: "inherit", whiteSpace: "nowrap", flexShrink: 0 },
     topBarCenter: { display: "flex", alignItems: "center", gap: 6, fontSize: 14, overflow: "hidden", whiteSpace: "nowrap" },
     newTabBtn: { display: "flex", alignItems: "center", gap: 3, background: "none", border: "1px solid #d1d5db", borderRadius: 8, padding: "6px 12px", fontSize: 13, fontWeight: 600, color: "#4b5563", textDecoration: "none", whiteSpace: "nowrap", flexShrink: 0, fontFamily: "inherit" },
+
+    /* embed area — fills all space below top bar */
+    embedArea: { flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" },
+    embedFull: { width: "100%", height: "100%", flex: 1, border: "none" },
+
     centerMsg: { position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", background: "#fafcfa", zIndex: 10, padding: 30, gap: 6, textAlign: "center" },
     centerMsgText: { margin: 0, color: "#718096", fontSize: 15, maxWidth: 320, lineHeight: 1.6 },
-    spinner: { width: 40, height: 40, border: "3px solid #e2e8f0", borderTopWidth: 3, borderRadius: "50%", animation: "fwspin 0.8s linear infinite" },
-    openDirectBtn: { display: "inline-block", padding: "12px 28px", color: "#fff", borderRadius: 10, textDecoration: "none", fontWeight: 700, fontSize: 15 },
     centerBackBtn: { background: "none", border: "2px solid", borderRadius: 10, padding: "10px 22px", fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", marginTop: 6 },
   };
 
