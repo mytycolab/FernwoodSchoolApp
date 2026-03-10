@@ -80,76 +80,96 @@
   }
 
   /* ══════════════════════════════════════════════════════
-     PDF RENDERER — uses PDF.js to draw pages on canvases
+     PDF RENDERER — multi-strategy: direct → proxy → iframe
      ══════════════════════════════════════════════════════ */
   function PdfRenderer(_ref) {
     var url = _ref.url, color = _ref.color;
     var containerRef = useRef(null);
-    var statusState = useState("loading");
+    var statusState = useState("loading"); // loading | loaded | iframe-fallback | failed
     var status = statusState[0], setStatus = statusState[1];
     var progressState = useState("");
     var progress = progressState[0], setProgress = progressState[1];
+
+    /* Render a loaded pdf document into canvases */
+    async function renderPages(pdf, container) {
+      container.innerHTML = "";
+      var numPages = pdf.numPages;
+      for (var i = 1; i <= numPages; i++) {
+        setProgress("Rendering page " + i + " of " + numPages + "\u2026");
+        var page = await pdf.getPage(i);
+        var containerWidth = container.clientWidth - 24;
+        var viewport = page.getViewport({ scale: 1 });
+        var scale = Math.min(Math.max(containerWidth / viewport.width, 0.5), 2.5);
+        var sv = page.getViewport({ scale: scale });
+
+        var canvas = document.createElement("canvas");
+        canvas.className = "pdf-canvas";
+        canvas.width = sv.width;
+        canvas.height = sv.height;
+        canvas.style.width = Math.min(sv.width, containerWidth) + "px";
+        container.appendChild(canvas);
+        await page.render({ canvasContext: canvas.getContext("2d"), viewport: sv }).promise;
+      }
+    }
 
     useEffect(function() {
       if (!url) return;
       var cancelled = false;
 
-      async function loadPdf() {
+      async function tryLoad() {
+        var container = containerRef.current;
+        if (!container) return;
+
+        /* Strategy 1: Direct PDF.js load */
         try {
-          setStatus("loading");
           setProgress("Downloading PDF\u2026");
           var pdf = await pdfjsLib.getDocument({ url: url, withCredentials: false }).promise;
           if (cancelled) return;
-
-          var container = containerRef.current;
-          if (!container) return;
-          container.innerHTML = "";
-
-          var numPages = pdf.numPages;
-          for (var i = 1; i <= numPages; i++) {
-            if (cancelled) return;
-            setProgress("Rendering page " + i + " of " + numPages + "\u2026");
-
-            var page = await pdf.getPage(i);
-            /* Scale to fit container width */
-            var containerWidth = container.clientWidth - 24;
-            var viewport = page.getViewport({ scale: 1 });
-            var scale = containerWidth / viewport.width;
-            /* Cap scale for very large screens, ensure minimum for mobile */
-            scale = Math.max(scale, 0.5);
-            scale = Math.min(scale, 2.5);
-            var scaledViewport = page.getViewport({ scale: scale });
-
-            var canvas = document.createElement("canvas");
-            canvas.className = "pdf-canvas";
-            canvas.width = scaledViewport.width;
-            canvas.height = scaledViewport.height;
-            canvas.style.width = Math.min(scaledViewport.width, containerWidth) + "px";
-            container.appendChild(canvas);
-
-            var ctx = canvas.getContext("2d");
-            await page.render({ canvasContext: ctx, viewport: scaledViewport }).promise;
-          }
+          await renderPages(pdf, container);
           if (!cancelled) setStatus("loaded");
-        } catch (err) {
-          console.error("PDF load error:", err);
-          if (!cancelled) setStatus("failed");
+          return;
+        } catch (e1) {
+          console.log("Direct PDF load failed, trying proxy\u2026", e1.message);
         }
+
+        /* Strategy 2: Load via CORS proxy */
+        if (cancelled) return;
+        try {
+          setProgress("Retrying via proxy\u2026");
+          var proxyUrl = "https://corsproxy.io/?" + encodeURIComponent(url);
+          var pdf2 = await pdfjsLib.getDocument({ url: proxyUrl, withCredentials: false }).promise;
+          if (cancelled) return;
+          await renderPages(pdf2, container);
+          if (!cancelled) setStatus("loaded");
+          return;
+        } catch (e2) {
+          console.log("Proxy PDF load failed, trying iframe\u2026", e2.message);
+        }
+
+        /* Strategy 3: Google Docs viewer iframe fallback */
+        if (!cancelled) setStatus("iframe-fallback");
       }
 
-      loadPdf();
+      setStatus("loading");
+      tryLoad();
       return function() { cancelled = true; };
     }, [url]);
 
+    var gViewer = "https://docs.google.com/gview?url=" + encodeURIComponent(url) + "&embedded=true";
+
     return e("div", { style: { flex: 1, overflow: "auto", background: "#e8e8e8", position: "relative" } },
+      /* loading spinner */
       status === "loading" && e("div", { style: S.centerMsg },
         e("div", { style: { ...S.spinner, borderTopColor: color } }),
         e("p", { style: { marginTop: 14, fontSize: 15, color: "#718096" } }, progress)),
-      status === "failed" && e("div", { style: S.centerMsg },
-        e("p", { style: { margin: 0, fontSize: 20, color: "#ef4444" } }, "Could not load this PDF."),
-        e("a", { href: url, target: "_blank", rel: "noopener noreferrer",
-          style: { ...S.openDirectBtn, background: color, marginTop: 12 } },
-          "Open PDF directly \u2197")),
+
+      /* iframe fallback */
+      status === "iframe-fallback" && e("iframe", {
+        src: gViewer, title: "PDF Viewer",
+        style: { position: "absolute", top: 0, left: 0, width: "100%", height: "100%", border: "none" }
+      }),
+
+      /* rendered PDF canvases */
       e("div", {
         ref: containerRef,
         style: { padding: "12px 0", display: status === "loaded" ? "block" : "none" }
